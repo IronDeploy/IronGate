@@ -10,3 +10,7 @@ Estado atual: núcleo Go + CLI da Fase 1 (Linux, FortiGate IPsec/IKEv2 com EAP-M
 
 Requer strongSwan (charon-systemd / swanctl) em execução e Secret Service para salvar credenciais.
 Perfis nunca contêm senha; a senha vai ao strongSwan pelo socket VICI, sem arquivo nem argv.
+
+## Licença
+
+Apache License 2.0. Veja [LICENSE](LICENSE).
