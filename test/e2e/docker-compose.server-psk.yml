@@ -1,0 +1,14 @@
+# Servidor de teste IKEv2 com PSK no servidor e EAP no usuário, com as portas IKE publicadas,
+# para conectar um cliente de fora (ex.: uma VM).
+# Uso: docker compose -f test/e2e/docker-compose.server-psk.yml up --build
+# O cliente deve resolver o nome "gateway" para o IP desta máquina (ex.: linha no /etc/hosts).
+# PSK: psk-de-teste-iron-gate. Usuário maria, senha senha123.
+services:
+  gateway:
+    build: {context: ../.., dockerfile: test/e2e/Dockerfile, target: server}
+    privileged: true
+    environment:
+      SERVER_MODE: psk
+    ports:
+      - "500:500/udp"
+      - "4500:4500/udp"

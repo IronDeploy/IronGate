@@ -3,7 +3,15 @@ services:
   gateway:
     build: {context: ../.., dockerfile: test/e2e/Dockerfile, target: server}
     privileged: true
+    # O cliente só começa quando o servidor já carregou a conexão. Sem isso, o strongSwan do servidor responde
+    # NO_PROPOSAL_CHOSEN (ainda não há configuração) e o teste falha de forma intermitente.
+    healthcheck:
+      test: ["CMD-SHELL", "swanctl --list-conns | grep -q '^rw:'"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
   client:
     build: {context: ../.., dockerfile: test/e2e/Dockerfile, target: client}
     privileged: true
-    depends_on: [gateway]
+    depends_on:
+      gateway: {condition: service_healthy}

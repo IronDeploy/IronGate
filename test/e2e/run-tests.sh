@@ -57,6 +57,16 @@ echo "== senha errada pelo helper"
 out=$(printf 'maria\nerrada\nn\n' | as tester irongate connect "Empresa X" 2>&1) && fail "senha errada deveria falhar"
 echo "$out" | grep -q "Erro: Senha ou usuário incorretos" || fail "mensagem de senha incorreta pelo helper"
 
+echo "== o CA de um perfil não vale para os outros perfis (nem depois de desconectar)"
+# O perfil "Empresa X" traz o CA e acabou de conectar e desconectar. Um perfil sem CA, para o mesmo servidor,
+# não pode herdar essa confiança: sem isso, o caCert não restringiria nada.
+printf '{"name":"Sem CA","engine":"ipsec-ikev2","gateway":"gateway","auth":"eap-mschapv2","allowSavePassword":false}' > /test/sem-ca.json
+as tester irongate import /test/sem-ca.json || fail "import (sem CA)"
+out=$(printf 'maria\nsenha123\nn\n' | as tester irongate connect "Sem CA" 2>&1) && fail "perfil sem CA conectou: o CA de outro perfil vazou"
+echo "$out" | grep -q "Erro: O certificado do servidor não é confiável" || fail "mensagem de certificado ausente: $out"
+echo "$out" | grep -q "Senha ou usuário incorretos" && fail "certificado não confiável foi tratado como senha errada"
+swanctl --list-authorities 2>/dev/null | grep -q irongate && fail "autoridade do perfil ficou carregada depois de desconectar"
+
 echo "== usuário fora do grupo recebe orientação clara"
 as intruso irongate import /test/perfil.json || fail "import (intruso)"
 out=$(as intruso irongate status "Empresa X" 2>&1) && fail "intruso não deveria conseguir"

@@ -57,3 +57,14 @@ func TestPSKErradaNaoEhSenhaErrada(t *testing.T) {
 		t.Error("PSK errada não deve descartar a senha do usuário")
 	}
 }
+
+func TestCertificadoNaoConfiavelNaoEhSenhaErrada(t *testing.T) {
+	// Log real de um servidor de teste com certificado, cliente sem o CA: traz AUTH_FAILED junto.
+	err := errors.New(`vici: command failed: no issuer certificate found for "CN=gateway"; issuer is "CN=Test CA"; no trusted RSA public key found for 'gateway'; generating INFORMATIONAL request 2 [ N(AUTH_FAILED) ]`)
+	if got := Friendly(err); !strings.Contains(got, "certificado") {
+		t.Errorf("mensagem = %q", got)
+	}
+	if IsAuthFailure(err) {
+		t.Error("certificado não confiável não pode descartar a senha salva")
+	}
+}
