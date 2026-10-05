@@ -3,7 +3,9 @@
 package engine
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
 	"github.com/irondeploy/iron-gate/internal/profile"
 	"github.com/strongswan/govici/vici"
@@ -67,19 +69,21 @@ func (*ipsec) Connect(p *profile.Profile, c Credentials) error {
 	if err := check(s.CommandRequest("load-shared", secret)); err != nil {
 		return err
 	}
+	// Remove o segredo do strongSwan ao terminar, com sucesso ou não: o túnel já negociou (ou falhou).
+	defer func() {
+		del, _ := vici.MarshalMessage(map[string]any{"id": "irongate-" + p.ConnName()})
+		_, _ = s.CommandRequest("unload-shared", del)
+	}()
 
 	init, _ := vici.MarshalMessage(map[string]any{"child": p.ConnName(), "ike": p.ConnName()})
-	msgs, err := s.StreamedCommandRequest("initiate", "control-log", init)
-	if err != nil {
-		return err
-	}
-	// Remove o segredo do strongSwan; o túnel já negociou (ou falhou).
-	del, _ := vici.MarshalMessage(map[string]any{"id": "irongate-" + p.ConnName()})
-	_, _ = s.CommandRequest("unload-shared", del)
-
-	for _, m := range msgs {
-		if e := m.Err(); e != nil {
-			return e
+	var logs []string
+	for m, err := range s.CallStreaming(context.Background(), "initiate", "control-log", init) {
+		if err != nil {
+			// O motivo real da falha só aparece no log do charon; anexa para o errmsg traduzir.
+			return fmt.Errorf("%w: %s", err, strings.Join(logs, "; "))
+		}
+		if msg, ok := m.Get("msg").(string); ok {
+			logs = append(logs, msg)
 		}
 	}
 	return nil
@@ -92,7 +96,7 @@ func (*ipsec) Disconnect(p *profile.Profile) error {
 	}
 	defer s.Close()
 	m, _ := vici.MarshalMessage(map[string]any{"ike": p.ConnName()})
-	if err := check(s.CommandRequest("terminate", m)); err != nil {
+	if err := check(s.CommandRequest("terminate", m)); err != nil && !noSession(err) {
 		return err
 	}
 	unl, _ := vici.MarshalMessage(map[string]any{"name": p.ConnName()})
@@ -115,6 +119,11 @@ func (*ipsec) Status(p *profile.Profile) (State, error) {
 		return Connected, nil
 	}
 	return Disconnected, nil
+}
+
+// noSession indica que não havia conexão ativa para encerrar, o que não é um erro para o usuário.
+func noSession(err error) bool {
+	return strings.Contains(err.Error(), "no matching")
 }
 
 func check(m *vici.Message, err error) error {

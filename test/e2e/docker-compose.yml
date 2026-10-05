@@ -1,0 +1,9 @@
+# Uso (na raiz do repositório): docker compose -f test/e2e/docker-compose.yml up --build --abort-on-container-exit --exit-code-from client
+services:
+  gateway:
+    build: {context: ../.., dockerfile: test/e2e/Dockerfile, target: server}
+    privileged: true
+  client:
+    build: {context: ../.., dockerfile: test/e2e/Dockerfile, target: client}
+    privileged: true
+    depends_on: [gateway]

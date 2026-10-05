@@ -60,6 +60,9 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Erro:", errmsg.Friendly(err))
+		if os.Getenv("IRONGATE_DEBUG") != "" {
+			fmt.Fprintln(os.Stderr, "Detalhe técnico:", err) // nunca contém senha
+		}
 		os.Exit(1)
 	}
 }
@@ -127,7 +130,6 @@ func cmdConnect(a []string) error {
 	}
 
 	err = eng.Connect(p, engine.Credentials{Username: user, Password: pw})
-	pw = "" // limpa a referência assim que o túnel sobe (ou falha)
 	if err != nil {
 		if errmsg.IsAuthFailure(err) && fromVault {
 			_ = store.Forget(p.Name) // senha salva está errada/expirada: pede de novo na próxima
@@ -138,13 +140,13 @@ func cmdConnect(a []string) error {
 	fmt.Println("Conectado.")
 
 	if !fromVault {
-		offerSave(p, store, user)
+		offerSave(p, store, user, pw)
 	}
 	return nil
 }
 
 // offerSave pergunta o nível de lembrança. allowSavePassword=false do TI desativa a senha.
-func offerSave(p *profile.Profile, store *creds.Store, user string) {
+func offerSave(p *profile.Profile, store *creds.Store, user, pw string) {
 	opts := "[n] não lembrar  [u] só usuário"
 	if p.AllowSavePassword {
 		opts += "  [s] usuário e senha"
@@ -220,13 +222,20 @@ func withEngine(name string, f func(*profile.Profile, engine.Engine) error) erro
 	return f(p, e)
 }
 
+// stdin é compartilhado para que a entrada via pipe não se perca entre perguntas.
+var stdin = bufio.NewReader(os.Stdin)
+
 func prompt(msg string) string {
 	fmt.Print(msg)
-	s, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	s, _ := stdin.ReadString('\n')
 	return strings.TrimSpace(s)
 }
 
+// promptSecret não ecoa a senha num terminal; sem terminal (pipe, testes), lê uma linha da entrada.
 func promptSecret(msg string) string {
+	if !term.IsTerminal(int(syscall.Stdin)) {
+		return prompt(msg)
+	}
 	fmt.Print(msg)
 	b, _ := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println()
