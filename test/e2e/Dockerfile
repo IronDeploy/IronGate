@@ -29,6 +29,7 @@ COPY --from=pki /pki/ca.pem /etc/swanctl/x509ca/ca.pem
 COPY --from=pki /pki/server.pem /etc/swanctl/x509/server.pem
 COPY --from=pki /pki/server.key /etc/swanctl/private/server.key
 COPY test/e2e/server.swanctl.conf /etc/swanctl/swanctl.conf
+COPY test/e2e/server-psk.swanctl.conf /etc/swanctl/server-psk.swanctl.conf
 COPY test/e2e/server-entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 

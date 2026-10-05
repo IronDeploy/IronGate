@@ -45,7 +45,7 @@ func ConnMessage(p *profile.Profile, username string) map[string]any {
 	return map[string]any{p.ConnName(): conn}
 }
 
-func (*ipsec) Connect(p *profile.Profile, c Credentials) error {
+func (*ipsec) Connect(p *profile.Profile, c Credentials) (retErr error) {
 	s, err := vici.NewSession()
 	if err != nil {
 		return fmt.Errorf("vici: %w", err)
@@ -53,14 +53,21 @@ func (*ipsec) Connect(p *profile.Profile, c Credentials) error {
 	defer s.Close()
 
 	if p.CACert != "" {
-		// Confiança só em memória, sem escrever em /etc/swanctl.
-		cert, err := vici.MarshalMessage(map[string]any{"type": "X509", "flag": "CA", "data": p.CACert})
+		// O CA entra como autoridade do perfil, só em memória. Diferente de um certificado solto, a
+		// autoridade pode ser descarregada: sem isso, o CA de um perfil continuaria confiável para
+		// todos os outros depois de desconectar.
+		auth, err := vici.MarshalMessage(map[string]any{p.ConnName(): map[string]any{"cacert": p.CACert}})
 		if err != nil {
 			return err
 		}
-		if err := check(s.CommandRequest("load-cert", cert)); err != nil {
+		if err := check(s.CommandRequest("load-authority", auth)); err != nil {
 			return err
 		}
+		defer func() {
+			if retErr != nil { // falhou: não deixa o CA para trás (conectado, ele sai no Disconnect)
+				unloadAuthority(s, p)
+			}
+		}()
 	}
 
 	conn, err := connMessage(p, c.Username)
@@ -133,7 +140,14 @@ func (*ipsec) Disconnect(p *profile.Profile) error {
 	}
 	unl, _ := vici.MarshalMessage(map[string]any{"name": p.ConnName()})
 	_, _ = s.CommandRequest("unload-conn", unl)
+	unloadAuthority(s, p)
 	return nil
+}
+
+// unloadAuthority descarrega o CA do perfil (erro ignorado: o perfil pode não ter CA próprio).
+func unloadAuthority(s *vici.Session, p *profile.Profile) {
+	m, _ := vici.MarshalMessage(map[string]any{"name": p.ConnName()})
+	_, _ = s.CommandRequest("unload-authority", m)
 }
 
 func (*ipsec) Status(p *profile.Profile) (State, error) {

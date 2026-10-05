@@ -15,6 +15,15 @@ var pluginNeedles = []string{"EAP_NAK", "not supported, sending", "loading EAP_M
 // PSK errada: o log também traz AUTH_FAILED, então vem antes da regra de senha e não conta como senha errada.
 var pskNeedles = []string{"MAC mismatched", "no shared key found"}
 
+// Certificado do servidor não confiável: o log também traz AUTH_FAILED, então vem antes da regra de senha
+// e não conta como senha errada (a senha salva não pode ser descartada por isso).
+var certNeedles = []string{"no trusted RSA public key found", "no trusted ECDSA public key found", "no issuer certificate found"}
+
+// O servidor recusa já na primeira resposta de autenticação, antes de pedir usuário e senha: costuma ser o
+// endereço do perfil que não bate com o nome do certificado (por exemplo, o IP em vez do nome). Também traz
+// AUTH_FAILED, então vem antes da regra de senha e não conta como senha errada.
+var identityNeedles = []string{"response 1 [ N(AUTH_FAILED) ]"}
+
 var authNeedles = []string{"EAP_FAILURE", "authentication failed", "AUTH_FAILED", "MSCHAPv2 failed", "eap-mschapv2 failed",
 	"XAuth authentication failed", "Failed to complete authentication", "cookie was rejected"}
 
@@ -26,6 +35,10 @@ var rules = []rule{
 		"O serviço do Iron Gate não está instalado. Rode 'sudo irongate setup' uma vez para ativá-lo."},
 	{pluginNeedles,
 		"O strongSwan não tem os plugins de autenticação. Instale 'libcharon-extra-plugins' e 'libcharon-extauth-plugins' e reinicie o serviço."},
+	{certNeedles,
+		"O certificado do servidor não é confiável. Confira o certificado da empresa (CA) no perfil ou peça o correto ao TI."},
+	{identityNeedles,
+		"O servidor recusou a identificação antes de pedir a senha. Use no perfil o mesmo nome do certificado do servidor (por exemplo, o nome em vez do IP)."},
 	{pskNeedles,
 		"A chave pré-compartilhada (PSK) está incorreta. Confira com o TI e informe de novo."},
 	{authNeedles,
@@ -77,8 +90,8 @@ func IsAuthFailure(err error) bool {
 		return false
 	}
 	low := strings.ToLower(err.Error())
-	if matchesAny(low, pluginNeedles) || matchesAny(low, pskNeedles) {
-		return false // instalação ou PSK, não a senha do usuário
+	if matchesAny(low, pluginNeedles) || matchesAny(low, pskNeedles) || matchesAny(low, certNeedles) || matchesAny(low, identityNeedles) {
+		return false // instalação, PSK, certificado ou identidade do servidor, não a senha do usuário
 	}
 	return matchesAny(low, authNeedles)
 }
