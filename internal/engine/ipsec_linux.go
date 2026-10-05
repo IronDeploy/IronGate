@@ -19,7 +19,7 @@ func newIPsec() (Engine, error) { return &ipsec{}, nil }
 // ConnMessage monta a conexão IKEv2 + EAP-MSCHAPv2 no formato VICI. Não contém senha.
 func ConnMessage(p *profile.Profile, username string) map[string]any {
 	child := p.ConnName()
-	remote := map[string]any{"auth": "pubkey", "id": p.Gateway}
+	remote := map[string]any{"auth": "pubkey", "id": p.ExpectedServerID()}
 	if p.UsesPSK() {
 		// O servidor se prova pela PSK. Sem id fixo: o identificador do FortiGate varia (IP, nome ou vazio).
 		remote = map[string]any{"auth": "psk", "id": "%any"}

@@ -38,7 +38,7 @@ var rules = []rule{
 	{certNeedles,
 		"O certificado do servidor não é confiável. Confira o certificado da empresa (CA) no perfil ou peça o correto ao TI."},
 	{identityNeedles,
-		"O servidor recusou a identificação antes de pedir a senha. Use no perfil o mesmo nome do certificado do servidor (por exemplo, o nome em vez do IP)."},
+		"O servidor recusou a identificação antes de pedir a senha. Use no perfil o mesmo nome do certificado do servidor, ou informe esse nome no campo serverId (o nome do servidor no certificado)."},
 	{pskNeedles,
 		"A chave pré-compartilhada (PSK) está incorreta. Confira com o TI e informe de novo."},
 	{authNeedles,
@@ -63,6 +63,9 @@ var rules = []rule{
 func Friendly(err error) string {
 	if err == nil {
 		return ""
+	}
+	if strings.Contains(err.Error(), "desconecte antes de removê-lo") {
+		return err.Error() // já é uma mensagem para o usuário
 	}
 	low := strings.ToLower(err.Error())
 	for _, r := range rules {

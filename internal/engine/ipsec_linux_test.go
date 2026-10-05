@@ -80,3 +80,21 @@ func TestConnMessageIKEv1RodadasEmOrdem(t *testing.T) {
 		}
 	}
 }
+
+func TestConnMessageUsaServerIDComoIdentidadeDoServidor(t *testing.T) {
+	p := &profile.Profile{Name: "X", Engine: profile.EngineIPsecIKEv2, Gateway: "192.0.2.10", Auth: profile.AuthEAPMSCHAPv2}
+	remote := func() map[string]any {
+		return ConnMessage(p, "maria")["irongate-X"].(map[string]any)["remote"].(map[string]any)
+	}
+	if remote()["id"] != "192.0.2.10" {
+		t.Errorf("sem serverId deveria usar o gateway, veio %v", remote()["id"])
+	}
+	p.ServerID = "gateway.empresa.com.br"
+	if r := remote(); r["id"] != "gateway.empresa.com.br" || r["auth"] != "pubkey" {
+		t.Errorf("com serverId, remote = %v", r)
+	}
+	// O endereço de conexão continua sendo o gateway.
+	if addrs := ConnMessage(p, "maria")["irongate-X"].(map[string]any)["remote_addrs"].([]string); addrs[0] != "192.0.2.10" {
+		t.Errorf("remote_addrs = %v", addrs)
+	}
+}

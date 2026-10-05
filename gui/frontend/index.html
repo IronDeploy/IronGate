@@ -125,6 +125,11 @@
 
       <details id="f-adv">
         <summary>Configurações avançadas</summary>
+        <div data-show="ipsec-cert">
+          <label for="f-serverid">Nome do servidor no certificado (opcional)</label>
+          <input id="f-serverid" spellcheck="false" placeholder="gateway.empresa.com.br">
+          <p class="muted">Preencha se o endereço acima for um IP, ou se o certificado do servidor tiver outro nome.</p>
+        </div>
         <div data-show="ipsec">
           <label for="f-ike">Propostas IKE (opcional)</label>
           <input id="f-ike" spellcheck="false" placeholder="aes256-sha256-modp2048">

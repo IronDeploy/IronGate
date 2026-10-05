@@ -48,6 +48,9 @@ type Profile struct {
 	// ServerAuth diz como o servidor se prova ao cliente no ipsec-ikev2: "cert" (padrão, certificado)
 	// ou "psk" (chave pré-compartilhada, pedida ao usuário e guardada no cofre, nunca no perfil).
 	ServerAuth string `json:"serverAuth,omitempty"`
+	// ServerID é o nome que o certificado do servidor apresenta, quando difere do gateway (por exemplo, o
+	// gateway é um IP e o certificado foi emitido para um nome). Só vale com serverAuth cert.
+	ServerID string `json:"serverId,omitempty"`
 	// IKEVersion é 1 ou 2 (padrão 2). O IKEv1 exige serverAuth psk e auth xauth.
 	IKEVersion int `json:"ikeVersion,omitempty"`
 	// Aggressive liga o modo agressivo do IKEv1 (o FortiClient usa quando não há "main mode").
@@ -148,6 +151,14 @@ func (p *Profile) validateEngine() error {
 		default:
 			return errors.New("perfil inválido: 'serverAuth' deve ser cert ou psk")
 		}
+		if p.ServerID != "" {
+			if !gatewayRe.MatchString(p.ServerID) {
+				return errors.New("perfil inválido: 'serverId' deve ser um nome de host ou IP, sem espaços nem http://")
+			}
+			if p.ServerAuth == "psk" || p.IKEVersion == 1 {
+				return errors.New("perfil inválido: 'serverId' só vale com serverAuth cert (com PSK o servidor não é identificado por certificado)")
+			}
+		}
 		for _, v := range []string{p.IKE, p.ESP} {
 			if v != "" && !proposalRe.MatchString(v) {
 				return errors.New("perfil inválido: 'ike' e 'esp' devem ser propostas do strongSwan, como aes256-sha256-modp2048")
@@ -157,8 +168,8 @@ func (p *Profile) validateEngine() error {
 			return fmt.Errorf("perfil inválido: protocol, port, authGroup, serverCertPin e samlPort são do motor %s", EngineOpenConnect)
 		}
 	case EngineOpenConnect:
-		if p.ServerAuth != "" || p.IKE != "" || p.ESP != "" || p.IKEVersion != 0 || p.Aggressive || p.LocalID != "" {
-			return fmt.Errorf("perfil inválido: serverAuth, ikeVersion, aggressive, localId, ike e esp são do motor %s", EngineIPsecIKEv2)
+		if p.ServerAuth != "" || p.ServerID != "" || p.IKE != "" || p.ESP != "" || p.IKEVersion != 0 || p.Aggressive || p.LocalID != "" {
+			return fmt.Errorf("perfil inválido: serverAuth, serverId, ikeVersion, aggressive, localId, ike e esp são do motor %s", EngineIPsecIKEv2)
 		}
 		if !openConnectProtocols[p.Protocol] {
 			return errors.New("perfil inválido: 'protocol' deve ser fortinet, anyconnect, gp, pulse, nc, f5 ou array")
@@ -188,6 +199,15 @@ func (p *Profile) validateEngine() error {
 		return fmt.Errorf("perfil inválido: motor %q não existe (disponíveis: %s, %s)", p.Engine, EngineIPsecIKEv2, EngineOpenConnect)
 	}
 	return nil
+}
+
+// ExpectedServerID é a identidade que o certificado do servidor deve apresentar: o serverId, se houver,
+// senão o próprio gateway.
+func (p *Profile) ExpectedServerID() string {
+	if p.ServerID != "" {
+		return p.ServerID
+	}
+	return p.Gateway
 }
 
 // UsesPSK diz se o servidor se autentica por chave pré-compartilhada.
