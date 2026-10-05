@@ -2,7 +2,9 @@
 const api = () => window.go.main.App;
 const $ = (id) => document.getElementById(id);
 
+let profiles = [];    // lista básica, sem consultar o cofre
 let info = null;      // perfil selecionado
+let infoReady = Promise.resolve(); // resolve quando os dados do cofre chegarem
 let connected = false;
 let busy = false;
 let timer = null;
@@ -36,6 +38,7 @@ async function bridgeReady(timeoutMs = 10000) {
 async function loadProfiles(select) {
   await bridgeReady();
   const list = (await api().Profiles()) || [];
+  profiles = list;
   $("empty").hidden = list.length > 0;
   $("main").hidden = list.length === 0;
   if (!list.length) return;
@@ -44,24 +47,44 @@ async function loadProfiles(select) {
   const keep = select || sel.value;
   sel.replaceChildren(...list.map((p) => new Option(p.Name, p.Name)));
   sel.value = list.some((p) => p.Name === keep) ? keep : list[0].Name;
-  await loadInfo();
+  loadInfo(); // não espera o cofre: a tela já está utilizável
 }
 
-async function loadInfo() {
+// Mostra o perfil na hora e completa com o cofre (usuário/senha salvos) quando ele responder.
+function loadInfo() {
   show("");
   $("diag-list").hidden = true;
+  const name = $("profile").value;
+  info = { ...profiles.find((p) => p.Name === name), SavedUsername: "", HasSavedPassword: false };
+  $("gateway").textContent = info.Gateway;
+  $("user").value = "";
+  $("pass").value = "";
+  $("pass").placeholder = "";
+  $("remember").hidden = false;
+  $("remember-password").disabled = true;
+  $("remember-password").closest(".opt").classList.add("disabled");
+  const hint = $("remember-hint");
+  hint.hidden = false;
+  hint.textContent = "Verificando o cofre de senhas do sistema…";
+  document.querySelector('input[name=remember][value=none]').checked = true;
+  refreshStatus();
+  infoReady = fillInfo(name);
+  return infoReady;
+}
+
+async function fillInfo(name) {
+  let full, vault;
   try {
-    info = await api().Profile($("profile").value);
+    [full, vault] = await Promise.all([api().Profile(name), api().VaultAvailable()]);
   } catch (e) {
-    show(errText(e), "err");
+    if ($("profile").value === name) show(errText(e), "err");
     return;
   }
-  $("gateway").textContent = info.Gateway;
-  $("user").value = info.SavedUsername || "";
-  $("pass").value = "";
+  if ($("profile").value !== name) return; // o usuário já trocou de perfil
+  info = full;
+  if (!$("user").value) $("user").value = info.SavedUsername || "";
   $("pass").placeholder = info.HasSavedPassword ? "Salva no cofre do sistema" : "";
 
-  const vault = await api().VaultAvailable();
   const canSave = info.AllowSavePassword && vault;
   const opt = $("remember-password");
   opt.disabled = !canSave;
@@ -71,9 +94,7 @@ async function loadInfo() {
   hint.textContent = !info.AllowSavePassword
     ? "A política deste perfil não permite salvar a senha."
     : "Cofre de senhas do sistema não encontrado: só o usuário pode ser lembrado.";
-  document.querySelector('input[name=remember][value=none]').checked = true;
   $("remember").hidden = info.HasSavedPassword;
-  await refreshStatus();
 }
 
 async function refreshStatus() {
@@ -98,6 +119,7 @@ async function onAction() {
       await api().Disconnect(info.Name);
       connected = false;
     } else {
+      await infoReady; // precisa saber se há senha salva antes de validar
       const user = $("user").value.trim();
       const pass = $("pass").value;
       if (!user || (!pass && !info.HasSavedPassword)) {
@@ -126,8 +148,9 @@ async function onAction() {
 // Recarrega os dados do perfil sem apagar a mensagem que está na tela.
 async function loadInfoKeepMsg() {
   const text = $("msg").textContent, cls = $("msg").className;
-  const wasConnected = connected;
+  const wasConnected = connected, typedUser = $("user").value;
   await loadInfo();
+  if (typedUser) $("user").value = typedUser;
   connected = wasConnected;
   await refreshStatus();
   if (text) show(text, cls);

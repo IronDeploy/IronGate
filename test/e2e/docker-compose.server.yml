@@ -1,0 +1,10 @@
+# Só o servidor de teste, com as portas IKE publicadas, para conectar um cliente de fora (ex.: uma VM).
+# Uso: docker compose -f test/e2e/docker-compose.server.yml up --build
+# O cliente deve resolver o nome "gateway" para o IP desta máquina (ex.: linha no /etc/hosts).
+services:
+  gateway:
+    build: {context: ../.., dockerfile: test/e2e/Dockerfile, target: server}
+    privileged: true
+    ports:
+      - "500:500/udp"
+      - "4500:4500/udp"

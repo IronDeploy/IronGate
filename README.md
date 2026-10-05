@@ -11,7 +11,7 @@ Estado atual: núcleo Go + CLI da Fase 1 (Linux, FortiGate IPsec/IKEv2 com EAP-M
 ## Requisitos (Linux)
 
 - strongSwan em execução (`charon-systemd` e `swanctl`).
-- No Debian/Ubuntu, instale também `libcharon-extauth-plugins`: é ele que fornece o `eap-mschapv2`. Sem ele o servidor recusa o login.
+- No Debian/Ubuntu, instale também `libcharon-extra-plugins` (fornece o `eap-identity`) e `libcharon-extauth-plugins` (fornece o `eap-mschapv2`). Sem eles o login falha mesmo com a senha certa.
 - Secret Service (GNOME Keyring, KWallet) para salvar credenciais. Sem ele o app não grava a senha.
 
 ## Interface gráfica (Wails)
@@ -46,6 +46,12 @@ Veja [examples/empresa-x.json](examples/empresa-x.json).
     docker compose -f test/e2e/docker-compose.yml up --build --abort-on-container-exit --exit-code-from client
 
 O segundo comando sobe um servidor strongSwan de teste e conecta o `irongate` nele. Precisa de Docker (os containers rodam como `privileged`).
+Para conectar um cliente de fora (por exemplo, a janela em uma VM), suba só o servidor com as portas IKE publicadas:
+
+    docker compose -f test/e2e/docker-compose.server.yml up --build
+
+O cliente deve resolver o nome `gateway` para o IP desta máquina (uma linha no `/etc/hosts`). Usuário `maria`, senha `senha123`. O CA de teste está dentro da imagem em `/etc/swanctl/x509ca/ca.pem`.
+
 Para ver o erro técnico por trás de uma mensagem, rode com `IRONGATE_DEBUG=1`.
 
 ## Licença

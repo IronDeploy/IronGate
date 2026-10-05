@@ -24,3 +24,17 @@ func TestFriendly(t *testing.T) {
 		t.Error("deveria ser falha de autenticação")
 	}
 }
+
+func TestPluginAusenteNaoEhSenhaErrada(t *testing.T) {
+	// Log real de um cliente sem o plugin eap-identity: traz EAP_FAILURE junto.
+	err := errors.New("vici: command failed: EAP_IDENTITY not supported, sending EAP_NAK; received EAP_FAILURE, EAP authentication failed")
+	if got := Friendly(err); !strings.Contains(got, "libcharon-extra-plugins") {
+		t.Errorf("mensagem = %q", got)
+	}
+	if IsAuthFailure(err) {
+		t.Error("plugin ausente não pode descartar a senha salva")
+	}
+	if !IsAuthFailure(errors.New("received EAP_FAILURE, EAP authentication failed")) {
+		t.Error("senha errada de verdade deve continuar contando")
+	}
+}

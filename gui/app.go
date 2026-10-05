@@ -19,7 +19,10 @@ type App struct {
 
 func NewApp() *App { return &App{svc: app.New()} }
 
-func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+	go a.svc.VaultAvailable() // começa a sondar o cofre já na abertura, em paralelo com a tela
+}
 
 // friendly traduz o erro técnico; a senha nunca entra em mensagem.
 func friendly(err error) error {

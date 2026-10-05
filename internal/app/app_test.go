@@ -133,3 +133,18 @@ func TestSenhaDigitadaErradaNaoApagaNada(t *testing.T) {
 		t.Errorf("não deve salvar quando a conexão falha: %+v", info)
 	}
 }
+
+// proibido falha o teste se o cofre for consultado.
+type proibido struct{ t *testing.T }
+
+func (p proibido) Get(s, u string) (string, error) { p.t.Error("cofre consultado"); return "", nil }
+func (p proibido) Set(s, u, v string) error        { p.t.Error("cofre consultado"); return nil }
+func (p proibido) Delete(s, u string) error        { p.t.Error("cofre consultado"); return nil }
+
+func TestListarPerfisNaoConsultaOCofre(t *testing.T) {
+	svc, _, _ := setup(t, true)
+	svc.Store = creds.NewWith(proibido{t}, t.TempDir())
+	if ps := svc.Profiles(); len(ps) != 1 || ps[0].Name != "Empresa X" {
+		t.Fatalf("perfis = %+v", ps)
+	}
+}

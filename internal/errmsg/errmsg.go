@@ -8,8 +8,16 @@ type rule struct {
 	msg     string
 }
 
+// Plugins do strongSwan ausentes: o log também traz EAP_FAILURE, então esta regra vem antes da de senha
+// e nunca deve contar como senha errada (a senha salva não pode ser descartada por isso).
+var pluginNeedles = []string{"EAP_NAK", "not supported, sending", "loading EAP_MSCHAPV2 method failed"}
+
+var authNeedles = []string{"EAP_FAILURE", "authentication failed", "AUTH_FAILED", "MSCHAPv2 failed", "eap-mschapv2 failed"}
+
 var rules = []rule{
-	{[]string{"EAP_FAILURE", "authentication failed", "AUTH_FAILED", "MSCHAPv2 failed", "eap-mschapv2 failed"},
+	{pluginNeedles,
+		"O strongSwan não tem os plugins de autenticação. Instale 'libcharon-extra-plugins' e 'libcharon-extauth-plugins' e reinicie o serviço."},
+	{authNeedles,
 		"Senha ou usuário incorretos (ou a senha expirou). Confira os dados e tente de novo."},
 	{[]string{"no trusted", "certificate", "issuer certificate"},
 		"O certificado do servidor não é confiável. Peça ao TI o certificado da empresa."},
@@ -41,16 +49,23 @@ func Friendly(err error) string {
 	return "Falhou: " + err.Error()
 }
 
+func matchesAny(low string, needles []string) bool {
+	for _, n := range needles {
+		if strings.Contains(low, strings.ToLower(n)) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsAuthFailure indica falha de credencial (o app deve pedir nova senha).
 func IsAuthFailure(err error) bool {
 	if err == nil {
 		return false
 	}
 	low := strings.ToLower(err.Error())
-	for _, n := range rules[0].needles {
-		if strings.Contains(low, strings.ToLower(n)) {
-			return true
-		}
+	if matchesAny(low, pluginNeedles) {
+		return false // problema de instalação, não de senha
 	}
-	return false
+	return matchesAny(low, authNeedles)
 }

@@ -44,7 +44,7 @@ type Store struct {
 
 // vaultTimeout evita que um cofre bloqueado (esperando um prompt de desbloqueio que pode nunca aparecer)
 // congele o app. Cofre que não responde conta como indisponível.
-var vaultTimeout = 5 * time.Second
+var vaultTimeout = 3 * time.Second
 
 var errVaultTimeout = errors.New("o cofre de senhas do sistema não respondeu (talvez esteja bloqueado)")
 

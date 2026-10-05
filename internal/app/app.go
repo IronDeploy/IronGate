@@ -52,8 +52,14 @@ type Service struct {
 
 func New() *Service { return &Service{Store: creds.New(), Engine: engine.ForProfile} }
 
+// basicInfo não consulta o cofre: é instantâneo, mesmo com o cofre bloqueado.
+func basicInfo(p *profile.Profile) ProfileInfo {
+	return ProfileInfo{Name: p.Name, Engine: p.Engine, Gateway: p.Gateway, AllowSavePassword: p.AllowSavePassword, SavedUsername: p.Username}
+}
+
+// info completa o perfil com o que está salvo no cofre, o que pode demorar até o tempo limite do cofre.
 func (s *Service) info(p *profile.Profile) ProfileInfo {
-	i := ProfileInfo{Name: p.Name, Engine: p.Engine, Gateway: p.Gateway, AllowSavePassword: p.AllowSavePassword, SavedUsername: p.Username}
+	i := basicInfo(p)
 	if i.SavedUsername == "" {
 		i.SavedUsername, _ = s.Store.Username(p.Name)
 	}
@@ -72,11 +78,13 @@ func (s *Service) Profile(name string) (ProfileInfo, error) {
 	return s.info(p), nil
 }
 
+// Profiles lista os perfis sem consultar o cofre (SavedUsername só traz o usuário fixo do perfil).
+// Use Profile para os dados salvos.
 func (s *Service) Profiles() []ProfileInfo {
 	ps, _ := profile.List()
 	out := make([]ProfileInfo, 0, len(ps))
 	for _, p := range ps {
-		out = append(out, s.info(p))
+		out = append(out, basicInfo(p))
 	}
 	return out
 }
