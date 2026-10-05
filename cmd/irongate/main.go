@@ -147,15 +147,19 @@ func cmdConnect(a []string) error {
 
 // offerSave pergunta o nível de lembrança. allowSavePassword=false do TI desativa a senha.
 func offerSave(p *profile.Profile, store *creds.Store, user, pw string) {
+	canSavePassword := p.AllowSavePassword && store.Available()
+	if p.AllowSavePassword && !canSavePassword {
+		fmt.Println("Não encontrei o cofre de senhas do sistema (Secret Service). Posso lembrar só o usuário; a senha não é gravada em arquivo.")
+	}
 	opts := "[n] não lembrar  [u] só usuário"
-	if p.AllowSavePassword {
+	if canSavePassword {
 		opts += "  [s] usuário e senha"
 	}
 	switch strings.ToLower(prompt("Lembrar? " + opts + ": ")) {
 	case "u":
 		_ = store.SaveUsername(p.Name, user)
 	case "s":
-		if p.AllowSavePassword {
+		if canSavePassword {
 			_ = store.SaveUsername(p.Name, user)
 			fmt.Println("Para salvar a senha, informe-a novamente.")
 			pw := promptSecret("Senha: ")
