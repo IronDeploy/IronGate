@@ -1,0 +1,9 @@
+{
+  "name": "Empresa X SSO",
+  "engine": "openconnect",
+  "protocol": "fortinet",
+  "gateway": "vpn.empresa.com.br",
+  "port": 8443,
+  "auth": "saml",
+  "allowSavePassword": false
+}

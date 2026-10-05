@@ -1,0 +1,9 @@
+{
+  "name": "Empresa X SSL-VPN",
+  "engine": "openconnect",
+  "protocol": "fortinet",
+  "gateway": "vpn.empresa.com.br",
+  "port": 443,
+  "auth": "password",
+  "allowSavePassword": true
+}

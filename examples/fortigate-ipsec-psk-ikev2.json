@@ -1,0 +1,8 @@
+{
+  "name": "Empresa X IPsec",
+  "engine": "ipsec-ikev2",
+  "gateway": "vpn.empresa.com.br",
+  "serverAuth": "psk",
+  "auth": "eap-mschapv2",
+  "allowSavePassword": true
+}

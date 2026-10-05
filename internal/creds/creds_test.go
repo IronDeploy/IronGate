@@ -30,13 +30,20 @@ func (f fake) Delete(s, u string) error {
 
 func TestForget(t *testing.T) {
 	s := NewWith(fake{}, t.TempDir())
-	_ = s.SaveUsername("p", "ana")
-	_ = s.SavePassword("p", "x")
+	_ = s.AddUser("p", "ana")
+	_ = s.SavePassword("p", "ana", "x")
+	_ = s.AddUser("p", "bia")
+	_ = s.SavePassword("p", "bia", "y")
 	if err := s.Forget("p"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Password("p"); !errors.Is(err, ErrNotFound) {
-		t.Fatal("senha deveria ter sido apagada")
+	for _, u := range []string{"ana", "bia"} {
+		if _, err := s.Password("p", u); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("senha de %s deveria ter sido apagada", u)
+		}
+	}
+	if len(s.Users("p")) != 0 {
+		t.Fatal("usuários deveriam ter sido esquecidos")
 	}
 }
 
@@ -53,13 +60,13 @@ func TestSemCofreGuardaSoUsuario(t *testing.T) {
 	if s.Available() {
 		t.Fatal("cofre deveria estar indisponível")
 	}
-	if err := s.SaveUsername("Empresa X", "ana"); err != nil {
+	if err := s.AddUser("Empresa X", "ana"); err != nil {
 		t.Fatal(err)
 	}
-	if u, err := s.Username("Empresa X"); err != nil || u != "ana" {
-		t.Fatalf("usuário = %q, %v", u, err)
+	if us := s.Users("Empresa X"); len(us) != 1 || us[0] != "ana" {
+		t.Fatalf("usuários = %v", us)
 	}
-	if err := s.SavePassword("Empresa X", "segredo"); err == nil {
+	if err := s.SavePassword("Empresa X", "ana", "segredo"); err == nil {
 		t.Fatal("senha não pode ser salva sem cofre")
 	}
 	// Nenhum arquivo pode conter a senha.
@@ -73,7 +80,7 @@ func TestSemCofreGuardaSoUsuario(t *testing.T) {
 	if err := s.Forget("Empresa X"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Username("Empresa X"); !errors.Is(err, ErrNotFound) {
+	if len(s.Users("Empresa X")) != 0 {
 		t.Fatal("usuário deveria ter sido esquecido")
 	}
 }
@@ -97,16 +104,51 @@ func TestCofreBloqueadoNaoTravaOApp(t *testing.T) {
 	if s.Available() {
 		t.Fatal("cofre que não responde deve contar como indisponível")
 	}
-	if _, err := s.Username("p"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("sem cofre e sem arquivo: err = %v", err)
+	if len(s.Users("p")) != 0 {
+		t.Fatal("sem cofre e sem arquivo não há usuários")
 	}
-	if err := s.SaveUsername("p", "ana"); err != nil {
+	if err := s.AddUser("p", "ana"); err != nil {
 		t.Fatal(err) // cai no arquivo
 	}
-	if u, _ := s.Username("p"); u != "ana" {
-		t.Fatalf("usuário = %q", u)
+	if us := s.Users("p"); len(us) != 1 || us[0] != "ana" {
+		t.Fatalf("usuários = %v", us)
 	}
 	if d := time.Since(start); d > 2*time.Second {
 		t.Fatalf("demorou %v: o app travaria", d)
+	}
+}
+
+func TestVariosUsuariosUltimoUsadoPrimeiro(t *testing.T) {
+	s := NewWith(fake{}, t.TempDir())
+	for _, u := range []string{"ana", "bia", "caio", "ana"} {
+		if err := s.AddUser("p", u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := strings.Join(s.Users("p"), ","); got != "ana,caio,bia" {
+		t.Fatalf("ordem = %s", got)
+	}
+	_ = s.SavePassword("p", "ana", "a1")
+	_ = s.SavePassword("p", "bia", "b1")
+	_ = s.SavePassword("p", "ana", "a2") // senha nova substitui a antiga
+	if v, _ := s.Password("p", "ana"); v != "a2" {
+		t.Errorf("senha da ana = %q", v)
+	}
+	if v, _ := s.Password("p", "bia"); v != "b1" {
+		t.Errorf("senha da bia = %q (cada usuário tem a sua)", v)
+	}
+	if err := s.AddUser("p", "x\ny"); err == nil {
+		t.Error("usuário com quebra de linha deveria ser recusado")
+	}
+}
+
+func TestPerfilAntigoComUmUsuarioContinuaFuncionando(t *testing.T) {
+	f := fake{"iron-gateprofile:p:user": "ana", "iron-gateprofile:p:pass": "velha"}
+	s := NewWith(f, t.TempDir())
+	if us := s.Users("p"); len(us) != 1 || us[0] != "ana" {
+		t.Fatalf("usuários = %v", us)
+	}
+	if v, err := s.Password("p", "ana"); err != nil || v != "velha" {
+		t.Fatalf("senha antiga = %q, %v", v, err)
 	}
 }

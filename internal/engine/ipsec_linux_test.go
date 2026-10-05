@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/irondeploy/iron-gate/internal/profile"
+	"github.com/strongswan/govici/vici"
 )
 
 func TestConnMessageNaoContemSenha(t *testing.T) {
@@ -38,5 +39,44 @@ func TestNoSession(t *testing.T) {
 	}
 	if noSession(errors.New("permission denied")) {
 		t.Error("outros erros não devem ser ignorados")
+	}
+}
+
+func TestConnMessagePSKeProposals(t *testing.T) {
+	p := &profile.Profile{Name: "X", Engine: profile.EngineIPsecIKEv2, Gateway: "g.exemplo.com", Auth: profile.AuthEAPMSCHAPv2,
+		ServerAuth: "psk", IKE: "aes256-sha256-modp2048", ESP: "aes256-sha256"}
+	conn := ConnMessage(p, "maria")["irongate-X"].(map[string]any)
+	if r := conn["remote"].(map[string]any); r["auth"] != "psk" || r["id"] != "%any" {
+		t.Errorf("remote = %v", r)
+	}
+	if conn["proposals"].([]string)[0] != "aes256-sha256-modp2048" {
+		t.Errorf("proposals = %v", conn["proposals"])
+	}
+}
+
+func TestConnMessageIKEv1RodadasEmOrdem(t *testing.T) {
+	p := &profile.Profile{Name: "X", Engine: profile.EngineIPsecIKEv2, Gateway: "g.exemplo.com", Auth: profile.AuthXAuth,
+		ServerAuth: "psk", IKEVersion: 1, Aggressive: true, LocalID: "grupo"}
+	for i := 0; i < 20; i++ { // o mapa do Go muda de ordem a cada volta; a mensagem não pode
+		m, err := connMessage(p, "maria")
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := m.Get("irongate-X").(*vici.Message)
+		var rounds []string
+		for _, k := range body.Keys() {
+			if strings.HasPrefix(k, "local") {
+				rounds = append(rounds, k)
+			}
+		}
+		if len(rounds) != 2 || rounds[0] != "local-1" || rounds[1] != "local-2" {
+			t.Fatalf("rodadas fora de ordem: %v", body.Keys())
+		}
+		if body.Get("version") != "1" || body.Get("aggressive") != "yes" {
+			t.Fatalf("version/aggressive: %v", body.Keys())
+		}
+		if l2 := body.Get("local-2").(*vici.Message); l2.Get("auth") != "xauth" || l2.Get("xauth_id") != "maria" {
+			t.Fatalf("local-2 = %v", l2.Keys())
+		}
 	}
 }

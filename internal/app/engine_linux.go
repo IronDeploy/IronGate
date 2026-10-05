@@ -17,7 +17,7 @@ func defaultEngine(p *profile.Profile) (engine.Engine, error) {
 	if os.Geteuid() == 0 || os.Getenv("IRONGATE_DIRECT") != "" {
 		return engine.ForProfile(p)
 	}
-	if p.Engine != profile.EngineIPsecIKEv2 {
+	if p.Engine != profile.EngineIPsecIKEv2 && p.Engine != profile.EngineOpenConnect {
 		return nil, fmt.Errorf("motor %q não suportado", p.Engine)
 	}
 	return helper.NewClient(), nil

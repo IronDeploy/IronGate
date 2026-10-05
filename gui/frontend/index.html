@@ -14,23 +14,34 @@
     </header>
 
     <section id="empty" hidden>
-      <p>Nenhum perfil ainda. Peça ao TI o arquivo do perfil da VPN e importe aqui.</p>
-      <button id="import-first" class="primary">Importar perfil</button>
+      <p>Nenhum perfil ainda. Crie um com os dados da sua VPN ou importe o arquivo que o TI enviou.</p>
+      <button id="new-first" class="primary">Criar perfil</button>
+      <button id="import-first" class="ghost wide">Importar perfil</button>
     </section>
 
     <section id="main" hidden>
       <label for="profile">Perfil</label>
       <div class="row">
         <select id="profile"></select>
-        <button id="import" class="ghost" title="Importar outro perfil">Importar</button>
+        <button id="new" class="ghost" title="Cadastrar um perfil">Novo</button>
+        <button id="import" class="ghost" title="Importar um arquivo de perfil">Importar</button>
       </div>
       <p id="gateway" class="muted"></p>
 
+      <div id="creds">
       <label for="user">Usuário</label>
-      <input id="user" autocomplete="username" spellcheck="false">
+      <div class="suggest-wrap">
+        <input id="user" autocomplete="off" spellcheck="false">
+        <ul id="suggest" class="suggest" role="listbox" hidden></ul>
+      </div>
+
+      <div id="psk-box" hidden>
+        <label for="psk">Chave pré-compartilhada (PSK): não está salva neste computador</label>
+        <input id="psk" type="password" autocomplete="off">
+      </div>
 
       <label for="pass">Senha</label>
-      <input id="pass" type="password" autocomplete="current-password">
+      <input id="pass" type="password" autocomplete="new-password">
 
       <fieldset id="remember">
         <legend>Lembrar neste computador</legend>
@@ -39,15 +50,105 @@
         <label class="opt"><input type="radio" name="remember" value="password" id="remember-password"> Usuário e senha</label>
         <p id="remember-hint" class="muted" hidden></p>
       </fieldset>
+      </div>
+      <p id="saml-note" class="muted" hidden>O login é feito no navegador: ao conectar, ele abre para você entrar com a conta da empresa.</p>
 
       <button id="action" class="primary">Conectar</button>
       <p id="msg" role="status" hidden></p>
 
       <div class="links">
         <button id="diag" class="link">Diagnóstico</button>
+        <button id="edit" class="link">Editar perfil</button>
+        <button id="delete" class="link">Excluir perfil</button>
         <button id="forget" class="link">Esquecer credenciais</button>
       </div>
       <ul id="diag-list" hidden></ul>
+    </section>
+
+    <section id="form" hidden>
+      <h2 id="form-title">Novo perfil</h2>
+
+      <label for="f-type">Tipo de VPN</label>
+      <select id="f-type">
+        <option value="ipsec2">IPsec (IKEv2)</option>
+        <option value="ipsec1">IPsec (IKEv1 com XAuth)</option>
+        <option value="ssl">SSL-VPN</option>
+      </select>
+
+      <label for="f-name">Nome da conexão</label>
+      <input id="f-name" maxlength="64" spellcheck="false" placeholder="Minha empresa">
+
+      <label for="f-gateway">Gateway remoto</label>
+      <input id="f-gateway" spellcheck="false" placeholder="vpn.empresa.com.br">
+
+      <div data-show="ssl">
+        <label for="f-protocol">Protocolo</label>
+        <select id="f-protocol">
+          <option value="fortinet">FortiGate (FortiClient)</option>
+          <option value="anyconnect">Cisco AnyConnect</option>
+          <option value="gp">GlobalProtect</option>
+          <option value="pulse">Pulse / Ivanti</option>
+          <option value="nc">Juniper Network Connect</option>
+          <option value="f5">F5 BIG-IP</option>
+          <option value="array">Array Networks</option>
+        </select>
+        <label for="f-port">Porta personalizada (opcional)</label>
+        <input id="f-port" type="number" min="1" max="65535" placeholder="443">
+        <label for="f-sslauth">Autenticação</label>
+        <select id="f-sslauth">
+          <option value="password">Usuário e senha</option>
+          <option value="saml">Login único (SSO) no navegador</option>
+        </select>
+      </div>
+
+      <div data-show="ipsec">
+        <label for="f-serverauth">Método de autenticação</label>
+        <select id="f-serverauth">
+          <option value="psk">Chave pré-compartilhada (PSK)</option>
+          <option value="cert">Certificado do servidor</option>
+        </select>
+        <p class="muted" data-show="ipsec1">No IKEv1 a chave pré-compartilhada é obrigatória.</p>
+        <div id="f-psk-box">
+          <label for="f-psk">Chave pré-compartilhada (PSK)</label>
+          <input id="f-psk" type="password" autocomplete="off" spellcheck="false">
+          <p class="muted" id="f-psk-hint">Fica guardada só no cofre do sistema. Você não precisa digitá-la ao conectar.</p>
+        </div>
+      </div>
+
+      <div data-show="ipsec1">
+        <label for="f-localid">ID local / grupo (opcional)</label>
+        <input id="f-localid" spellcheck="false">
+        <label class="opt"><input type="checkbox" id="f-aggressive"> Modo agressivo</label>
+      </div>
+
+      <label class="opt"><input type="checkbox" id="f-save" checked> Permitir salvar a senha neste computador</label>
+
+      <details id="f-adv">
+        <summary>Configurações avançadas</summary>
+        <div data-show="ipsec">
+          <label for="f-ike">Propostas IKE (opcional)</label>
+          <input id="f-ike" spellcheck="false" placeholder="aes256-sha256-modp2048">
+          <label for="f-esp">Propostas ESP (opcional)</label>
+          <input id="f-esp" spellcheck="false" placeholder="aes256-sha256">
+        </div>
+        <div data-show="ssl">
+          <label for="f-authgroup">Grupo de login (opcional)</label>
+          <input id="f-authgroup" spellcheck="false">
+          <label for="f-pin">Pin do certificado do servidor (opcional)</label>
+          <input id="f-pin" spellcheck="false" placeholder="pin-sha256:...">
+        </div>
+        <div data-show="ssl-saml">
+          <label for="f-samlport">Porta local do retorno do SSO</label>
+          <input id="f-samlport" type="number" min="1" max="65535" placeholder="8020">
+        </div>
+        <label for="f-ca">Certificado da CA da empresa (PEM, opcional)</label>
+        <textarea id="f-ca" rows="4" spellcheck="false" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+      </details>
+
+      <p class="muted">Usuário e senha são pedidos ao conectar. Nada disso fica no arquivo do perfil.</p>
+      <button id="f-save-btn" class="primary">Salvar perfil</button>
+      <button id="f-cancel" class="ghost wide">Cancelar</button>
+      <p id="f-msg" role="status" hidden></p>
     </section>
   </main>
   <script src="app.js"></script>

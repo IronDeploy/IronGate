@@ -1,0 +1,8 @@
+{
+  "name": "Empresa X AnyConnect",
+  "engine": "openconnect",
+  "protocol": "anyconnect",
+  "gateway": "vpn.empresa.com.br",
+  "authGroup": "Funcionarios",
+  "allowSavePassword": true
+}

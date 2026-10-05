@@ -25,7 +25,7 @@ Maintainer: $MAINTAINER
 Installed-Size: $SIZE
 Section: net
 Priority: optional
-Depends: strongswan-swanctl, charon-systemd, libcharon-extra-plugins, libcharon-extauth-plugins, libgtk-3-0, libwebkit2gtk-4.0-37
+Depends: openconnect, strongswan-swanctl, charon-systemd, libcharon-extra-plugins, libcharon-extauth-plugins, libgtk-3-0, libwebkit2gtk-4.0-37
 Recommends: gnome-keyring | kwalletmanager
 Homepage: https://github.com/irondeploy/iron-gate
 Description: A VPN corporativa em um clique

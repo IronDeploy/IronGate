@@ -5,7 +5,10 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
+
+	"github.com/irondeploy/iron-gate/internal/profile"
 )
 
 type Result struct {
@@ -14,8 +17,10 @@ type Result struct {
 	Hint  string
 }
 
-// Run testa DNS e a abertura de socket UDP 500/4500 (IKE). UDP não confirma resposta do servidor.
-func Run(ctx context.Context, gateway string) []Result {
+// Run testa o DNS e a porta do perfil: TCP no SSL-VPN (openconnect) e UDP 500/4500 no IKE.
+// UDP não confirma resposta do servidor; TCP confirma que a porta aceita conexão.
+func Run(ctx context.Context, p *profile.Profile) []Result {
+	gateway := p.Gateway
 	var out []Result
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -26,6 +31,19 @@ func Run(ctx context.Context, gateway string) []Result {
 		return out
 	}
 	out = append(out, Result{"DNS", true, fmt.Sprintf("%s -> %s", gateway, addrs[0])})
+
+	if p.Engine == profile.EngineOpenConnect {
+		port := "443"
+		if p.Port != 0 {
+			port = strconv.Itoa(p.Port)
+		}
+		c, err := net.DialTimeout("tcp", net.JoinHostPort(addrs[0], port), 5*time.Second)
+		if err != nil {
+			return append(out, Result{"TCP " + port, false, "Não consegui abrir a porta " + port + " do servidor. Confira a porta no perfil; sua rede ou firewall pode estar bloqueando."})
+		}
+		c.Close()
+		return append(out, Result{"TCP " + port, true, "a porta do servidor aceita conexão"})
+	}
 
 	for _, port := range []string{"500", "4500"} {
 		c, err := net.DialTimeout("udp", net.JoinHostPort(addrs[0], port), 3*time.Second)

@@ -1,0 +1,11 @@
+{
+  "name": "Empresa X IKEv1",
+  "engine": "ipsec-ikev2",
+  "gateway": "vpn.empresa.com.br",
+  "ikeVersion": 1,
+  "serverAuth": "psk",
+  "auth": "xauth",
+  "aggressive": true,
+  "localId": "grupo-vpn",
+  "allowSavePassword": true
+}
