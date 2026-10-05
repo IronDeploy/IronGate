@@ -1,0 +1,30 @@
+name: Funcionalidade
+description: Sugerir algo novo ou uma melhoria
+title: "[Funcionalidade] "
+labels: ["tipo: feature"]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qual problema isso resolve?
+      description: Descreva a situação, não a solução. Quem passa por ela e com que frequência.
+    validations:
+      required: true
+  - type: textarea
+    id: proposta
+    attributes:
+      label: Como você imagina a solução
+      description: Se já pensou em uma, descreva. Se tiver como referência outro cliente de VPN, diga qual.
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas
+  - type: checkboxes
+    id: seguranca
+    attributes:
+      label: Segurança
+      options:
+        - label: Não exige gravar senha, PSK ou cookie fora do cofre do sistema
+          required: false
+        - label: Mexe no helper privilegiado (precisa de revisão de segurança)
+          required: false

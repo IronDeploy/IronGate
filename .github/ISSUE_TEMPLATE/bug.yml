@@ -1,0 +1,60 @@
+name: Bug
+description: Algo não funciona como deveria
+title: "[Bug] "
+labels: ["tipo: bug", "status: precisa-de-info"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Antes de enviar, remova dados reais:** nome do gateway, IPs, usuário, senha, PSK e certificados privados. Use `vpn.empresa.com.br` e valores fictícios.
+  - type: textarea
+    id: o-que-aconteceu
+    attributes:
+      label: O que aconteceu
+      description: O que você fez, o que esperava e o que viu. Prints ajudam, sem dados reais.
+    validations:
+      required: true
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: Tipo de VPN
+      options:
+        - IPsec IKEv2 (EAP)
+        - IPsec IKEv1 (XAuth)
+        - SSL-VPN com usuário e senha
+        - SSL-VPN com login único (SAML)
+        - Não sei
+    validations:
+      required: true
+  - type: input
+    id: equipamento
+    attributes:
+      label: Servidor VPN
+      description: Marca e versão, se souber (por exemplo, FortiGate 7.2).
+  - type: input
+    id: sistema
+    attributes:
+      label: Sistema operacional
+      placeholder: Ubuntu 24.04 (arm64)
+    validations:
+      required: true
+  - type: input
+    id: versao
+    attributes:
+      label: Versão do Iron Gate
+      description: O número do pacote `.deb` ou o commit.
+  - type: dropdown
+    id: onde
+    attributes:
+      label: Onde aconteceu
+      options:
+        - Janela
+        - CLI
+        - Instalação
+        - Outro
+  - type: textarea
+    id: detalhe
+    attributes:
+      label: Detalhe técnico
+      description: Rode com `IRONGATE_DEBUG=1` e cole o "Detalhe técnico" (ele não contém senha). **Troque IPs e nomes por valores fictícios.**
+      render: text
