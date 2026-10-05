@@ -12,7 +12,11 @@ type rule struct {
 // e nunca deve contar como senha errada (a senha salva não pode ser descartada por isso).
 var pluginNeedles = []string{"EAP_NAK", "not supported, sending", "loading EAP_MSCHAPV2 method failed"}
 
-var authNeedles = []string{"EAP_FAILURE", "authentication failed", "AUTH_FAILED", "MSCHAPv2 failed", "eap-mschapv2 failed"}
+// PSK errada: o log também traz AUTH_FAILED, então vem antes da regra de senha e não conta como senha errada.
+var pskNeedles = []string{"MAC mismatched", "no shared key found"}
+
+var authNeedles = []string{"EAP_FAILURE", "authentication failed", "AUTH_FAILED", "MSCHAPv2 failed", "eap-mschapv2 failed",
+	"XAuth authentication failed", "Failed to complete authentication", "cookie was rejected"}
 
 var rules = []rule{
 	// Helper do Iron Gate (usuário comum): precisa estar instalado e o usuário no grupo.
@@ -22,10 +26,14 @@ var rules = []rule{
 		"O serviço do Iron Gate não está instalado. Rode 'sudo irongate setup' uma vez para ativá-lo."},
 	{pluginNeedles,
 		"O strongSwan não tem os plugins de autenticação. Instale 'libcharon-extra-plugins' e 'libcharon-extauth-plugins' e reinicie o serviço."},
+	{pskNeedles,
+		"A chave pré-compartilhada (PSK) está incorreta. Confira com o TI e informe de novo."},
 	{authNeedles,
 		"Senha ou usuário incorretos (ou a senha expirou). Confira os dados e tente de novo."},
-	{[]string{"no trusted", "certificate", "issuer certificate"},
+	{[]string{"no trusted", "certificate", "issuer certificate", "verify failed"},
 		"O certificado do servidor não é confiável. Peça ao TI o certificado da empresa."},
+	{[]string{"Failed to open HTTPS connection", "SSL connection failure"},
+		"Não consegui abrir a conexão segura com o servidor. Confira o endereço, a porta e sua internet."},
 	{[]string{"retransmit", "timeout", "timed out", "no response", "giving up after"},
 		"O servidor não respondeu. Verifique sua internet e se o endereço do servidor está certo."},
 	{[]string{"NO_PROPOSAL_CHOSEN", "no proposal chosen"},
@@ -69,8 +77,13 @@ func IsAuthFailure(err error) bool {
 		return false
 	}
 	low := strings.ToLower(err.Error())
-	if matchesAny(low, pluginNeedles) {
-		return false // problema de instalação, não de senha
+	if matchesAny(low, pluginNeedles) || matchesAny(low, pskNeedles) {
+		return false // instalação ou PSK, não a senha do usuário
 	}
 	return matchesAny(low, authNeedles)
+}
+
+// IsPSKFailure indica que o servidor não aceitou a chave pré-compartilhada.
+func IsPSKFailure(err error) bool {
+	return err != nil && matchesAny(strings.ToLower(err.Error()), pskNeedles)
 }

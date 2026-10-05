@@ -69,3 +69,75 @@ func TestCACert(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenConnectPerfis(t *testing.T) {
+	ok := []string{
+		`{"name":"A","engine":"openconnect","protocol":"fortinet","gateway":"vpn.exemplo.com","port":8443}`,
+		`{"name":"A","engine":"openconnect","protocol":"fortinet","auth":"saml","gateway":"vpn.exemplo.com","samlPort":8020}`,
+		`{"name":"A","engine":"openconnect","protocol":"anyconnect","gateway":"vpn.exemplo.com","authGroup":"Funcionarios","serverCertPin":"pin-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}`,
+		`{"name":"A","engine":"openconnect","protocol":"gp","gateway":"2001:db8::1","port":443}`,
+	}
+	for _, j := range ok {
+		if _, err := Parse([]byte(j)); err != nil {
+			t.Errorf("%s: %v", j, err)
+		}
+	}
+	bad := []string{
+		`{"name":"A","engine":"openconnect","gateway":"vpn.exemplo.com"}`,                                           // sem protocolo
+		`{"name":"A","engine":"openconnect","protocol":"--script=x","gateway":"vpn.exemplo.com"}`,                   // injeção
+		`{"name":"A","engine":"openconnect","protocol":"gp","auth":"saml","gateway":"vpn.exemplo.com"}`,             // saml só no fortinet
+		`{"name":"A","engine":"openconnect","protocol":"fortinet","gateway":"vpn.exemplo.com","port":70000}`,        // porta
+		`{"name":"A","engine":"openconnect","protocol":"fortinet","gateway":"vpn.exemplo.com","samlPort":8020}`,     // samlPort sem saml
+		`{"name":"A","engine":"openconnect","protocol":"fortinet","gateway":"vpn.exemplo.com","serverCertPin":"x"}`, // pin inválido
+		`{"name":"A","engine":"ipsec-ikev2","gateway":"vpn.exemplo.com","port":8443}`,                               // campo do outro motor
+		`{"name":"A","engine":"wireguard","gateway":"vpn.exemplo.com"}`,
+	}
+	for _, j := range bad {
+		if _, err := Parse([]byte(j)); err == nil {
+			t.Errorf("deveria falhar: %s", j)
+		}
+	}
+}
+
+func TestAddr(t *testing.T) {
+	for _, c := range []struct {
+		gw   string
+		port int
+		want string
+	}{{"a.b", 0, "a.b"}, {"a.b", 8443, "a.b:8443"}, {"2001:db8::1", 443, "[2001:db8::1]:443"}} {
+		if got := (&Profile{Gateway: c.gw, Port: c.port}).Addr(); got != c.want {
+			t.Errorf("%s:%d -> %s", c.gw, c.port, got)
+		}
+	}
+}
+
+func TestIPsecPSKeIKEv1(t *testing.T) {
+	ok := []string{
+		`{"name":"A","gateway":"vpn.exemplo.com","serverAuth":"psk"}`,
+		`{"name":"A","gateway":"vpn.exemplo.com","serverAuth":"psk","ike":"aes256-sha256-modp2048","esp":"aes256-sha256"}`,
+		`{"name":"A","gateway":"vpn.exemplo.com","ikeVersion":1,"serverAuth":"psk","aggressive":true,"localId":"grupo-ti"}`,
+	}
+	for _, j := range ok {
+		if _, err := Parse([]byte(j)); err != nil {
+			t.Errorf("%s: %v", j, err)
+		}
+	}
+	p, _ := Parse([]byte(ok[2]))
+	if p.Auth != AuthXAuth || !p.UsesPSK() {
+		t.Errorf("IKEv1 deveria assumir xauth e psk: %+v", p)
+	}
+	bad := []string{
+		`{"name":"A","gateway":"vpn.exemplo.com","ikeVersion":1}`,                                     // v1 sem psk
+		`{"name":"A","gateway":"vpn.exemplo.com","ikeVersion":3,"serverAuth":"psk"}`,                  // versão
+		`{"name":"A","gateway":"vpn.exemplo.com","aggressive":true}`,                                  // agressivo é do v1
+		`{"name":"A","gateway":"vpn.exemplo.com","serverAuth":"psk","ike":"aes;rm -rf"}`,              // injeção
+		`{"name":"A","gateway":"vpn.exemplo.com","ikeVersion":1,"serverAuth":"psk","localId":"a b{"}`, // id
+		`{"name":"A","gateway":"vpn.exemplo.com","serverAuth":"senha"}`,
+		`{"name":"A","engine":"openconnect","protocol":"fortinet","gateway":"vpn.exemplo.com","serverAuth":"psk"}`,
+	}
+	for _, j := range bad {
+		if _, err := Parse([]byte(j)); err == nil {
+			t.Errorf("deveria falhar: %s", j)
+		}
+	}
+}

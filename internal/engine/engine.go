@@ -18,6 +18,10 @@ const (
 type Credentials struct {
 	Username string
 	Password string
+	// Cookie é a sessão obtida pelo login único (SAML). Vale como senha: nunca vai a disco nem a argv.
+	Cookie string
+	// PSK é a chave pré-compartilhada do servidor (serverAuth psk). Só em memória.
+	PSK string
 }
 
 type Engine interface {
@@ -32,6 +36,8 @@ func ForProfile(p *profile.Profile) (Engine, error) {
 	switch p.Engine {
 	case profile.EngineIPsecIKEv2:
 		return newIPsec()
+	case profile.EngineOpenConnect:
+		return newOpenConnect()
 	}
 	return nil, fmt.Errorf("motor %q não suportado", p.Engine)
 }

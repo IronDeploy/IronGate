@@ -120,9 +120,36 @@ func (s *Store) userFile(profile string) string {
 
 func key(profile string) string { return "profile:" + profile }
 
-func (s *Store) SaveUsername(profile, user string) error {
+func passKey(profile, user string) string { return key(profile) + ":pass:" + user }
+
+// maxUsers limita a lista de usuários lembrados por perfil.
+const maxUsers = 20
+
+// Users devolve os usuários lembrados do perfil, o mais recente primeiro. Perfis antigos, com um usuário
+// só, continuam valendo. Sem cofre, a lista vem do arquivo de usuários (não é segredo).
+func (s *Store) Users(profile string) []string {
+	var raw string
 	if s.Available() {
-		return s.set(key(profile)+":user", user)
+		raw, _ = s.get(key(profile) + ":users")
+		if raw == "" {
+			raw, _ = s.get(key(profile) + ":user") // formato antigo: um usuário só
+		}
+	} else if b, err := os.ReadFile(s.userFile(profile)); err == nil {
+		raw = string(b)
+	}
+	var out []string
+	for _, u := range strings.Split(raw, "\n") {
+		if u = strings.TrimSpace(u); u != "" {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+func (s *Store) writeUsers(profile string, users []string) error {
+	raw := strings.Join(users, "\n")
+	if s.Available() {
+		return s.set(key(profile)+":users", raw)
 	}
 	if s.dir == "" {
 		return errors.New("sem cofre do sistema e sem pasta de configuração para guardar o usuário")
@@ -130,52 +157,81 @@ func (s *Store) SaveUsername(profile, user string) error {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(s.userFile(profile), []byte(user+"\n"), 0o600)
+	return os.WriteFile(s.userFile(profile), []byte(raw+"\n"), 0o600)
 }
 
-func (s *Store) Username(profile string) (string, error) {
-	if s.Available() {
-		v, err := s.get(key(profile) + ":user")
-		return v, mapErr(err)
+// AddUser lembra o usuário e o coloca no topo da lista (o último usado vem primeiro).
+func (s *Store) AddUser(profile, user string) error {
+	user = strings.TrimSpace(user)
+	if user == "" || strings.ContainsAny(user, "\r\n") {
+		return errors.New("usuário inválido")
 	}
-	b, err := os.ReadFile(s.userFile(profile))
-	if errors.Is(err, os.ErrNotExist) {
-		return "", ErrNotFound
+	users := []string{user}
+	for _, u := range s.Users(profile) {
+		if u != user && len(users) < maxUsers {
+			users = append(users, u)
+		}
 	}
-	return strings.TrimSpace(string(b)), err
+	return s.writeUsers(profile, users)
 }
 
-func (s *Store) SavePassword(profile, pw string) error {
-	if err := s.set(key(profile)+":pass", pw); err != nil {
+// SavePassword guarda a senha do usuário no cofre, trocando a anterior desse usuário.
+func (s *Store) SavePassword(profile, user, pw string) error {
+	if err := s.set(passKey(profile, user), pw); err != nil {
 		return fmt.Errorf("não foi possível usar o cofre do sistema (não vou gravar a senha em arquivo): %w", err)
 	}
 	return nil
 }
 
-func (s *Store) Password(profile string) (string, error) {
-	v, err := s.get(key(profile) + ":pass")
+// Password devolve a senha salva do usuário. Perfis antigos guardavam uma senha só, do único usuário.
+func (s *Store) Password(profile, user string) (string, error) {
+	v, err := s.get(passKey(profile, user))
+	if errors.Is(err, keyring.ErrNotFound) {
+		if us := s.Users(profile); len(us) == 1 && us[0] == user {
+			v, err = s.get(key(profile) + ":pass")
+		}
+	}
 	return v, mapErr(err)
 }
 
-// ForgetPassword apaga só a senha salva, mantendo o usuário.
-func (s *Store) ForgetPassword(profile string) error {
-	err := s.del(key(profile) + ":pass")
+// ForgetPassword apaga só a senha salva do usuário, mantendo o usuário na lista.
+func (s *Store) ForgetPassword(profile, user string) error {
+	err := s.del(passKey(profile, user))
 	if errors.Is(err, keyring.ErrNotFound) {
 		return nil
 	}
 	return err
 }
 
-// Forget apaga usuário e senha salvos do perfil.
+// SavePSK guarda a chave pré-compartilhada do perfil no cofre do sistema (nunca em arquivo).
+func (s *Store) SavePSK(profile, psk string) error { return s.set(key(profile)+":psk", psk) }
+
+func (s *Store) PSK(profile string) (string, error) { return s.get(key(profile) + ":psk") }
+
+func (s *Store) ForgetPSK(profile string) error {
+	err := s.del(key(profile) + ":psk")
+	if errors.Is(err, keyring.ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
+// Forget apaga todos os usuários, senhas e a PSK salvos do perfil.
 func (s *Store) Forget(profile string) error {
 	var first error
-	if err := os.Remove(s.userFile(profile)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		first = err
-	}
-	for _, k := range []string{":user", ":pass"} {
-		if err := s.del(key(profile) + k); err != nil && !errors.Is(err, keyring.ErrNotFound) && first == nil && s.Available() {
+	note := func(err error) {
+		if err != nil && !errors.Is(err, keyring.ErrNotFound) && first == nil && s.Available() {
 			first = err
 		}
+	}
+	for _, u := range s.Users(profile) {
+		note(s.del(passKey(profile, u)))
+	}
+	if err := os.Remove(s.userFile(profile)); err != nil && !errors.Is(err, os.ErrNotExist) && first == nil {
+		first = err
+	}
+	for _, k := range []string{":users", ":user", ":pass", ":psk"} {
+		note(s.del(key(profile) + k))
 	}
 	return first
 }

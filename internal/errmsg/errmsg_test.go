@@ -8,9 +8,12 @@ import (
 
 func TestFriendly(t *testing.T) {
 	cases := map[string]string{
-		"received EAP_FAILURE":           "Senha",
-		"retransmit giving up":           "não respondeu",
-		"dial unix /var/run/charon.vici": "strongSwan",
+		"received EAP_FAILURE":                     "Senha",
+		"retransmit giving up":                     "não respondeu",
+		"dial unix /var/run/charon.vici":           "strongSwan",
+		"Failed to complete authentication":        "Senha",
+		"Failed to open HTTPS connection to vpn.x": "conexão segura",
+		"Server certificate verify failed":         "certificado",
 		// Regressões: erros que não são do strongSwan não podem virar "serviço parado".
 		"vici: command failed: establishing CHILD_SA failed": "Falhou:",
 		"open /x/perfil.json: no such file or directory":     "Falhou:",
@@ -45,5 +48,12 @@ func TestErrosDoHelper(t *testing.T) {
 	}
 	if got := Friendly(errors.New("dial unix /run/irongate/helper.sock: connect: no such file or directory")); !strings.Contains(got, "sudo irongate setup") {
 		t.Errorf("ausente: %q", got)
+	}
+}
+
+func TestPSKErradaNaoEhSenhaErrada(t *testing.T) {
+	err := errors.New("tried 1 shared key for 'x' - 'y', but MAC mismatched; N(AUTH_FAILED)")
+	if IsAuthFailure(err) || !IsPSKFailure(err) {
+		t.Error("PSK errada não deve descartar a senha do usuário")
 	}
 }

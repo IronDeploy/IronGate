@@ -19,7 +19,7 @@ h1 { font-size: 20px; margin: 0; }
 .badge.busy { color: var(--accent); }
 section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
 label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
-input[type=text], input[type=password], input:not([type]), select {
+input[type=text], input[type=password], input[type=number], input:not([type]), select, textarea {
   width: 100%; padding: 9px 10px; font: inherit; color: var(--text); background: var(--bg);
   border: 1px solid var(--line); border-radius: 8px;
 }
@@ -46,3 +46,16 @@ button.link { background: none; border: 0; color: var(--accent); padding: 4px 0;
 #diag-list .good { color: var(--ok); }
 #diag-list .bad { color: var(--err); }
 [hidden] { display: none !important; }
+h2 { font-size: 17px; margin: 0 0 4px; }
+textarea { font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
+details { margin-top: 14px; }
+summary { cursor: pointer; color: var(--accent); font-size: 14px; }
+button.wide { width: 100%; margin-top: 8px; padding: 10px; }
+.links { flex-wrap: wrap; gap: 4px 14px; }
+.suggest-wrap { position: relative; }
+.suggest { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 2px); margin: 0; padding: 4px; list-style: none;
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.18); max-height: 180px; overflow: auto; }
+.suggest li { padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+.suggest li:hover, .suggest li.active { background: var(--bg); }
+.suggest .tag { float: right; color: var(--muted); font-size: 12px; }
+#f-msg { margin: 12px 0 0; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--err); color: var(--err); font-size: 14px; }

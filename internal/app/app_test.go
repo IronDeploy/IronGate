@@ -1,7 +1,11 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/irondeploy/iron-gate/internal/creds"
@@ -22,13 +26,15 @@ func (f fakeVault) Set(s, u, p string) error { f[s+u] = p; return nil }
 func (f fakeVault) Delete(s, u string) error { delete(f, s+u); return nil }
 
 type fakeEngine struct {
-	err  error
-	user string
-	pw   string
+	err    error
+	user   string
+	pw     string
+	cookie string
+	psk    string
 }
 
 func (e *fakeEngine) Connect(_ *profile.Profile, c engine.Credentials) error {
-	e.user, e.pw = c.Username, c.Password
+	e.user, e.pw, e.cookie, e.psk = c.Username, c.Password, c.Cookie, c.PSK
 	return e.err
 }
 func (e *fakeEngine) Disconnect(*profile.Profile) error             { return nil }
@@ -146,5 +152,187 @@ func TestListarPerfisNaoConsultaOCofre(t *testing.T) {
 	svc.Store = creds.NewWith(proibido{t}, t.TempDir())
 	if ps := svc.Profiles(); len(ps) != 1 || ps[0].Name != "Empresa X" {
 		t.Fatalf("perfis = %+v", ps)
+	}
+}
+
+func TestLoginUnicoNaoPedeSenhaNemUsaCofre(t *testing.T) {
+	svc, eng, vault := setup(t, true)
+	if _, err := svc.Import([]byte(`{"name":"SSO","engine":"openconnect","protocol":"fortinet","auth":"saml","gateway":"vpn.exemplo.com","port":8443}`)); err != nil {
+		t.Fatal(err)
+	}
+	svc.SAML = func(context.Context, *profile.Profile) (string, error) { return "SVPNCOOKIE=x", nil }
+	if _, err := svc.Connect(ConnectRequest{Profile: "SSO", Remember: RememberPassword}); err != nil {
+		t.Fatal(err)
+	}
+	if eng.cookie != "SVPNCOOKIE=x" || eng.user != "" || eng.pw != "" {
+		t.Errorf("motor recebeu user=%q pw=%q cookie=%q", eng.user, eng.pw, eng.cookie)
+	}
+	if len(vault) != 0 {
+		t.Errorf("nada deveria ir ao cofre: %v", vault)
+	}
+	svc.SAML = func(context.Context, *profile.Profile) (string, error) { return "", errors.New("tempo esgotado") }
+	if _, err := svc.Connect(ConnectRequest{Profile: "SSO"}); err == nil {
+		t.Error("falha no navegador deveria virar erro")
+	}
+}
+
+func conectar(t *testing.T, svc *Service, user, pw string) {
+	t.Helper()
+	if _, err := svc.Connect(ConnectRequest{Profile: "Empresa X", Username: user, Password: pw, Remember: RememberPassword}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestVariosUsuariosCadaUmComASuaSenha(t *testing.T) {
+	svc, eng, _ := setup(t, true)
+	conectar(t, svc, "ana", "senha-ana")
+	conectar(t, svc, "bia", "senha-bia")
+
+	info, _ := svc.Profile("Empresa X")
+	if len(info.SavedUsers) != 2 || info.SavedUsers[0] != "bia" || info.SavedUsername != "bia" || !info.HasSavedPassword {
+		t.Fatalf("info = %+v", info)
+	}
+	// Trocar para a ana: a tela pergunta se ela tem senha, e conectar sem digitar usa a dela.
+	if ok, _ := svc.UserHasPassword("Empresa X", "ana"); !ok {
+		t.Fatal("ana deveria ter senha salva")
+	}
+	if ok, _ := svc.UserHasPassword("Empresa X", "novo"); ok {
+		t.Fatal("usuário novo não tem senha salva")
+	}
+	if _, err := svc.Connect(ConnectRequest{Profile: "Empresa X", Username: "ana"}); err != nil {
+		t.Fatal(err)
+	}
+	if eng.user != "ana" || eng.pw != "senha-ana" {
+		t.Fatalf("usou %q/%q", eng.user, eng.pw)
+	}
+	if info, _ = svc.Profile("Empresa X"); info.SavedUsername != "ana" {
+		t.Fatalf("a ana deveria ser a última usada: %v", info.SavedUsers)
+	}
+}
+
+func TestSenhaNovaQueConectouSubstituiAAntiga(t *testing.T) {
+	svc, eng, _ := setup(t, true)
+	conectar(t, svc, "ana", "velha")
+	// Digita outra senha, mesmo sem marcar nada em "lembrar".
+	if _, err := svc.Connect(ConnectRequest{Profile: "Empresa X", Username: "ana", Password: "nova", Remember: RememberNone}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Connect(ConnectRequest{Profile: "Empresa X", Username: "ana"}); err != nil {
+		t.Fatal(err)
+	}
+	if eng.pw != "nova" {
+		t.Fatalf("a senha salva deveria ser a nova, veio %q", eng.pw)
+	}
+}
+
+func TestSenhaNovaQueFalhouNaoSubstituiAAntiga(t *testing.T) {
+	svc, eng, _ := setup(t, true)
+	conectar(t, svc, "ana", "boa")
+	eng.err = errors.New("rede fora do ar")
+	if _, err := svc.Connect(ConnectRequest{Profile: "Empresa X", Username: "ana", Password: "digitada-errado"}); err == nil {
+		t.Fatal("esperava erro")
+	}
+	eng.err = nil
+	if _, err := svc.Connect(ConnectRequest{Profile: "Empresa X", Username: "ana"}); err != nil {
+		t.Fatal(err)
+	}
+	if eng.pw != "boa" {
+		t.Fatalf("a senha salva não pode mudar quando a conexão falha, veio %q", eng.pw)
+	}
+}
+
+func TestSenhaErradaSalvaDescartaSoDaqueleUsuario(t *testing.T) {
+	svc, eng, _ := setup(t, true)
+	conectar(t, svc, "ana", "a")
+	conectar(t, svc, "bia", "b")
+	eng.err = errors.New("received EAP_FAILURE")
+	_, _ = svc.Connect(ConnectRequest{Profile: "Empresa X", Username: "ana"})
+	if ok, _ := svc.UserHasPassword("Empresa X", "ana"); ok {
+		t.Error("a senha da ana deveria ter sido descartada")
+	}
+	if ok, _ := svc.UserHasPassword("Empresa X", "bia"); !ok {
+		t.Error("a senha da bia deveria continuar salva")
+	}
+}
+
+func TestCadastroEdicaoEExclusaoDePerfil(t *testing.T) {
+	svc, _, _ := setup(t, true)
+	novo := []byte(`{"name":"Filial","engine":"ipsec-ikev2","gateway":"vpn.filial.com.br","serverAuth":"psk","allowSavePassword":true}`)
+	if name, err := svc.SaveProfile(novo, "", ""); err != nil || name != "Filial" {
+		t.Fatalf("%q, %v", name, err)
+	}
+	if _, err := svc.SaveProfile(novo, "", ""); err == nil {
+		t.Error("perfil novo com nome repetido deveria falhar")
+	}
+	if _, err := svc.SaveProfile([]byte(`{"name":"Filial","gateway":"a b"}`), "Filial", ""); err == nil {
+		t.Error("perfil inválido deveria falhar")
+	}
+	// Editar mantendo o nome é permitido.
+	if _, err := svc.SaveProfile(novo, "Filial", ""); err != nil {
+		t.Fatal(err)
+	}
+	// Renomear para um nome que já existe não pode sobrescrever o outro.
+	if _, err := svc.SaveProfile([]byte(`{"name":"Empresa X","gateway":"x.com"}`), "Filial", ""); err == nil {
+		t.Error("renomear sobre outro perfil deveria falhar")
+	}
+	renomeado := []byte(`{"name":"Filial SP","engine":"ipsec-ikev2","gateway":"vpn.filial.com.br","serverAuth":"psk"}`)
+	if _, err := svc.SaveProfile(renomeado, "Filial", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Profile("Filial"); err == nil {
+		t.Error("o nome antigo deveria ter sumido")
+	}
+	if j, err := svc.ProfileJSON("Filial SP"); err != nil || !strings.Contains(j, `"serverAuth": "psk"`) {
+		t.Fatalf("%q, %v", j, err)
+	}
+	if err := svc.DeleteProfile("Filial SP"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Profile("Filial SP"); err == nil {
+		t.Error("perfil excluído ainda existe")
+	}
+}
+
+func TestPSKDoCadastroVaiAoCofreENaoPedeNoLogin(t *testing.T) {
+	svc, eng, vault := setup(t, false) // mesmo sem permissão de salvar senha de usuário
+	perfil := []byte(`{"name":"Matriz","engine":"ipsec-ikev2","gateway":"vpn.matriz.com.br","serverAuth":"psk","allowSavePassword":false}`)
+	if _, err := svc.SaveProfile(perfil, "", "psk-da-empresa"); err != nil {
+		t.Fatal(err)
+	}
+	if vault["iron-gateprofile:Matriz:psk"] != "psk-da-empresa" {
+		t.Fatalf("a PSK deveria estar no cofre: %v", vault)
+	}
+	if b, _ := os.ReadFile(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "iron-gate", "profiles", "Matriz.json")); strings.Contains(string(b), "psk-da-empresa") {
+		t.Fatal("a PSK vazou para o arquivo do perfil")
+	}
+	info, _ := svc.Profile("Matriz")
+	if !info.NeedsPSK || !info.HasSavedPSK {
+		t.Fatalf("info = %+v", info)
+	}
+	// Conectar com usuário e senha apenas: a PSK vem do cofre.
+	if _, err := svc.Connect(ConnectRequest{Profile: "Matriz", Username: "ana", Password: "s3"}); err != nil {
+		t.Fatal(err)
+	}
+	if eng.psk != "psk-da-empresa" {
+		t.Fatalf("o motor recebeu a PSK %q", eng.psk)
+	}
+	// Editar sem informar a PSK mantém a salva; renomear leva a PSK junto.
+	renomeado := []byte(`{"name":"Matriz SP","engine":"ipsec-ikev2","gateway":"vpn.matriz.com.br","serverAuth":"psk"}`)
+	if _, err := svc.SaveProfile(renomeado, "Matriz", ""); err != nil {
+		t.Fatal(err)
+	}
+	if vault["iron-gateprofile:Matriz SP:psk"] != "psk-da-empresa" {
+		t.Fatalf("a PSK deveria acompanhar o novo nome: %v", vault)
+	}
+	if _, ok := vault["iron-gateprofile:Matriz:psk"]; ok {
+		t.Error("a PSK do nome antigo deveria ter sido apagada")
+	}
+	// Trocar para certificado apaga a PSK.
+	cert := []byte(`{"name":"Matriz SP","engine":"ipsec-ikev2","gateway":"vpn.matriz.com.br","serverAuth":"cert"}`)
+	if _, err := svc.SaveProfile(cert, "Matriz SP", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := vault["iron-gateprofile:Matriz SP:psk"]; ok {
+		t.Error("PSK não deveria sobrar num perfil por certificado")
 	}
 }

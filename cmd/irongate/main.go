@@ -116,15 +116,25 @@ func cmdConnect(a []string) error {
 		return err
 	}
 	req := app.ConnectRequest{Profile: info.Name}
+	if info.Auth == "saml" {
+		fmt.Println("Abrindo o navegador para o login...")
+		return finishConnect(svc.Connect(req))
+	}
 	if info.SavedUsername == "" {
 		req.Username = prompt("Usuário: ")
+	}
+	if info.NeedsPSK && !info.HasSavedPSK {
+		req.PSK = promptSecret("Chave pré-compartilhada (PSK): ")
 	}
 	if !info.HasSavedPassword {
 		req.Password = promptSecret("Senha: ")
 		req.Remember = askRemember(info)
 	}
 
-	res, err := svc.Connect(req)
+	return finishConnect(svc.Connect(req))
+}
+
+func finishConnect(res app.Result, err error) error {
 	for _, w := range res.Warnings {
 		fmt.Fprintln(os.Stderr, "Aviso:", w)
 	}

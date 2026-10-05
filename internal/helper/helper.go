@@ -36,6 +36,8 @@ type request struct {
 	Profile  json.RawMessage `json:"profile"`
 	Username string          `json:"username,omitempty"`
 	Password string          `json:"password,omitempty"`
+	Cookie   string          `json:"cookie,omitempty"`
+	PSK      string          `json:"psk,omitempty"`
 }
 
 type response struct {
@@ -91,10 +93,17 @@ func (s *Server) do(req request) response {
 	}
 	switch req.Op {
 	case opConnect:
-		if req.Username == "" || req.Password == "" {
+		if p.Auth == profile.AuthSAML {
+			if req.Cookie == "" {
+				return response{Error: "faltou a sessão do login único"}
+			}
+		} else if req.Username == "" || req.Password == "" {
 			return response{Error: "informe usuário e senha"}
 		}
-		err = eng.Connect(p, engine.Credentials{Username: req.Username, Password: req.Password})
+		if p.UsesPSK() && req.PSK == "" {
+			return response{Error: "faltou a chave pré-compartilhada (PSK)"}
+		}
+		err = eng.Connect(p, engine.Credentials{Username: req.Username, Password: req.Password, Cookie: req.Cookie, PSK: req.PSK})
 	case opDisc:
 		err = eng.Disconnect(p)
 	case opStatus:
@@ -147,7 +156,7 @@ func (c *Client) Connect(p *profile.Profile, cr engine.Credentials) error {
 	if err != nil {
 		return err
 	}
-	req.Username, req.Password = cr.Username, cr.Password
+	req.Username, req.Password, req.Cookie, req.PSK = cr.Username, cr.Password, cr.Cookie, cr.PSK
 	_, err = c.call(req)
 	return err
 }

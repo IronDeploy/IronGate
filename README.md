@@ -2,7 +2,7 @@
 
 A VPN corporativa em um clique.
 
-Estado atual: núcleo Go + CLI da Fase 1 (Linux, FortiGate IPsec/IKEv2 com EAP-MSCHAPv2). Sem interface gráfica ainda.
+Estado atual: Linux, com dois motores: IPsec/IKEv2 com EAP-MSCHAPv2 (strongSwan) e SSL-VPN (openconnect: FortiGate, AnyConnect, GlobalProtect, Pulse, NetScaler, F5 e Array), inclusive FortiGate com login único (SAML) pelo navegador.
 
     go build -o irongate ./cmd/irongate
     ./irongate import examples/empresa-x.json
@@ -21,6 +21,7 @@ Sem o pacote (compilando do código-fonte), instale as dependências abaixo e ro
 ### Dependências
 
 - `strongswan-swanctl` e `charon-systemd` (o strongSwan com a interface VICI). Não deixe o `strongswan-starter` rodando junto: são dois daemons disputando o mesmo socket.
+- `openconnect` (motor SSL-VPN).
 - `libcharon-extra-plugins` (fornece o `eap-identity`) e `libcharon-extauth-plugins` (fornece o `eap-mschapv2`). Sem eles o login falha mesmo com a senha certa.
 - Secret Service (GNOME Keyring, KWallet) para salvar a senha. Sem ele o app só lembra o usuário.
 
@@ -58,12 +59,39 @@ Veja [examples/empresa-x.json](examples/empresa-x.json).
 | Campo | Descrição |
 |---|---|
 | `name` | Nome do perfil |
-| `engine` | Motor (hoje só `ipsec-ikev2`) |
+| `engine` | Motor: `ipsec-ikev2` (IPsec, IKEv1 e IKEv2) ou `openconnect` (SSL-VPN) |
 | `gateway` | Endereço do servidor VPN |
-| `auth` | Autenticação (hoje só `eap-mschapv2`) |
+| `auth` | `eap-mschapv2` (IKEv2) ou `xauth` (IKEv1) no IPsec; `password` ou `saml` (openconnect; padrão de cada motor se omitido) |
 | `username` | Opcional: usuário fixo |
 | `allowSavePassword` | `false` impede o app de salvar a senha |
 | `caCert` | Opcional: certificado (PEM) da autoridade que assinou o certificado do servidor. O app o carrega no strongSwan só em memória. Sem ele vale o que o sistema já confia |
+
+Campos do IPsec (`ipsec-ikev2`), equivalentes aos do FortiClient em "VPN IPsec":
+
+| Campo | Descrição |
+|---|---|
+| `serverAuth` | `cert` (padrão, certificado do servidor) ou `psk` (chave pré-compartilhada). A PSK é pedida na primeira conexão e guardada só no cofre do sistema, nunca no perfil |
+| `ikeVersion` | `2` (padrão, com EAP) ou `1` (exige `serverAuth: psk` e `auth: xauth`) |
+| `aggressive` | IKEv1: modo agressivo |
+| `localId` | IKEv1: ID de grupo/local (o "ID local" do FortiClient) |
+| `ike`, `esp` | Propostas de criptografia, no formato do strongSwan (ex.: `aes256-sha256-modp2048`). Copie dos ajustes avançados do FortiClient |
+
+Exemplos: [IKEv2 com PSK e EAP](examples/fortigate-ipsec-psk-ikev2.json), [IKEv1 com PSK e XAuth](examples/fortigate-ipsec-ikev1-xauth.json).
+
+Campos do motor `openconnect` (SSL-VPN):
+
+| Campo | Descrição |
+|---|---|
+| `protocol` | Obrigatório: `fortinet`, `anyconnect`, `gp`, `pulse`, `nc`, `f5` ou `array` |
+| `port` | Porta do gateway (ex.: 8443 no FortiGate). Sem ela vale a padrão do protocolo |
+| `auth` | `password` (usuário e senha) ou `saml` (login único no navegador, só `fortinet`) |
+| `authGroup` | Grupo/realm de login (AnyConnect, GlobalProtect) |
+| `serverCertPin` | `pin-sha256:...` do certificado do servidor, para quem não tem o `caCert` |
+| `samlPort` | Porta local do retorno do login único; padrão 8020 (a mesma do FortiClient) |
+
+Com `auth: saml` o app abre o navegador, você entra com a conta da empresa e ele conclui sozinho: não pede usuário nem senha e nada é salvo. A sessão obtida vai ao openconnect pela entrada padrão, sem arquivo nem argv. Exemplos: [fortigate-ssl-vpn-sso.json](examples/fortigate-ssl-vpn-sso.json), [fortigate-ssl-vpn-senha.json](examples/fortigate-ssl-vpn-senha.json), [anyconnect.json](examples/anyconnect.json).
+
+Ainda não há suporte a código MFA digitado no app (token/TOTP fora do SAML), nem a certificado de cliente.
 
 ## Testes
 
