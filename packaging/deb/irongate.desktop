@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Iron Gate
+Comment=A VPN corporativa em um clique
+Exec=irongate-gui
+Icon=network-vpn
+Terminal=false
+Categories=Network;Security;

@@ -36,5 +36,7 @@ FROM base AS client
 # O CA fica fora de /etc/swanctl de propósito: o irongate deve carregá-lo a partir do perfil.
 COPY --from=pki /pki/ca.pem /etc/test-ca.pem
 COPY --from=build /irongate /usr/local/bin/irongate
+# tester está no grupo do helper; intruso não. Nenhum dos dois é root nem acessa o VICI.
+RUN groupadd --system irongate && useradd -m -G irongate tester && useradd -m intruso
 COPY test/e2e/run-tests.sh /run-tests.sh
 ENTRYPOINT ["/run-tests.sh"]

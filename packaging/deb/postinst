@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+    getent group irongate >/dev/null || groupadd --system irongate
+    # Quem instalou com sudo entra no grupo; os demais usuários são adicionados com 'sudo usermod -aG irongate NOME'.
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+        usermod -aG irongate "$SUDO_USER"
+        echo "Iron Gate: usuário $SUDO_USER adicionado ao grupo irongate. Saia da sessão e entre de novo para valer."
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl enable --now irongate-helper.socket || true
+    fi
+fi
+exit 0

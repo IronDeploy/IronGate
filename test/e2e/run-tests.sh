@@ -40,4 +40,26 @@ echo "== esquecer credenciais"
 irongate forget "Empresa X" || fail "forget"
 [ -z "$(ls /root/.config/iron-gate/users 2>/dev/null)" ] || fail "usuário não foi esquecido"
 
+echo "== usuário comum: sem acesso direto ao strongSwan, mas conecta pelo helper"
+[ "$(stat -c %a /var/run/charon.vici)" = "770" ] || fail "o socket VICI deveria ser 770 (só root)"
+runuser -u tester -- swanctl --stats >/dev/null 2>&1 && fail "usuário comum não deveria alcançar o socket VICI"
+irongate helper &
+for i in $(seq 1 10); do [ -S /run/irongate/helper.sock ] && break; sleep 1; done
+as() { u=$1; shift; runuser -u "$u" -- env HOME=/home/$u XDG_CONFIG_HOME=/home/$u/.config IRONGATE_DEBUG=1 "$@"; }
+as tester irongate import /test/perfil.json || fail "import (tester)"
+printf 'maria\nsenha123\nn\n' | as tester irongate connect "Empresa X" || fail "connect pelo helper"
+as tester irongate status "Empresa X" | grep -q "conectado" || fail "status pelo helper"
+swanctl --list-sas | grep -q ESTABLISHED || fail "SA não estabelecida pelo helper"
+as tester irongate disconnect "Empresa X" || fail "disconnect pelo helper"
+as tester irongate status "Empresa X" | grep -q "desconectado" || fail "status deveria ser desconectado"
+
+echo "== senha errada pelo helper"
+out=$(printf 'maria\nerrada\nn\n' | as tester irongate connect "Empresa X" 2>&1) && fail "senha errada deveria falhar"
+echo "$out" | grep -q "Erro: Senha ou usuário incorretos" || fail "mensagem de senha incorreta pelo helper"
+
+echo "== usuário fora do grupo recebe orientação clara"
+as intruso irongate import /test/perfil.json || fail "import (intruso)"
+out=$(as intruso irongate status "Empresa X" 2>&1) && fail "intruso não deveria conseguir"
+echo "$out" | grep -q "saia da sessão" || fail "mensagem de permissão ausente: $out"
+
 echo "TUDO OK"

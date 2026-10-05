@@ -38,3 +38,12 @@ func TestPluginAusenteNaoEhSenhaErrada(t *testing.T) {
 		t.Error("senha errada de verdade deve continuar contando")
 	}
 }
+
+func TestErrosDoHelper(t *testing.T) {
+	if got := Friendly(errors.New("dial unix /run/irongate/helper.sock: connect: permission denied")); !strings.Contains(got, "saia da sessão") {
+		t.Errorf("permissão: %q", got)
+	}
+	if got := Friendly(errors.New("dial unix /run/irongate/helper.sock: connect: no such file or directory")); !strings.Contains(got, "sudo irongate setup") {
+		t.Errorf("ausente: %q", got)
+	}
+}

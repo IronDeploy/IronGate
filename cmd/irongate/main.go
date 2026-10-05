@@ -11,7 +11,10 @@ import (
 	"syscall"
 
 	"github.com/irondeploy/iron-gate/internal/app"
+	"github.com/irondeploy/iron-gate/internal/engine"
 	"github.com/irondeploy/iron-gate/internal/errmsg"
+	"github.com/irondeploy/iron-gate/internal/helper"
+	"github.com/irondeploy/iron-gate/internal/setup"
 	"golang.org/x/term"
 )
 
@@ -27,6 +30,8 @@ Uso:
   irongate status <perfil>         mostra o estado
   irongate forget <perfil>         esquece usuário e senha salvos
   irongate diag <perfil>           diagnostica problemas de conexão
+  sudo irongate setup [--user NOME] [--undo]
+                                   instala (ou remove) o serviço que dá acesso seguro ao strongSwan
 `
 
 func main() {
@@ -51,6 +56,10 @@ func main() {
 		err = need(args, 1, cmdForget)
 	case "diag":
 		err = need(args, 1, cmdDiag)
+	case "setup":
+		err = cmdSetup(args)
+	case "helper": // serviço interno, iniciado pelo systemd
+		err = cmdHelper()
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
@@ -58,7 +67,11 @@ func main() {
 		os.Exit(2)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Erro:", errmsg.Friendly(err))
+		msg := errmsg.Friendly(err)
+		if errors.Is(err, app.ErrNeedCredentials) {
+			msg = err.Error() // já é uma mensagem para o usuário
+		}
+		fmt.Fprintln(os.Stderr, "Erro:", msg)
 		if os.Getenv("IRONGATE_DEBUG") != "" {
 			fmt.Fprintln(os.Stderr, "Detalhe técnico:", err) // nunca contém senha
 		}
@@ -166,6 +179,55 @@ func cmdForget(a []string) error {
 	}
 	fmt.Println("Credenciais esquecidas.")
 	return nil
+}
+
+// cmdSetup instala o helper. Sem --user, usa quem chamou o sudo.
+func cmdSetup(args []string) error {
+	var username string
+	undo := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--undo":
+			undo = true
+		case "--export-units": // uso do empacotamento: grava as units e sai
+			if i+2 >= len(args) {
+				return errors.New("--export-units precisa de DIRETÓRIO e CAMINHO-DO-BINÁRIO")
+			}
+			return setup.ExportUnits(args[i+1], args[i+2])
+		case "--user":
+			if i+1 >= len(args) {
+				return errors.New("--user precisa de um nome")
+			}
+			username = args[i+1]
+			i++
+		default:
+			return fmt.Errorf("opção desconhecida %q; veja 'irongate help'", args[i])
+		}
+	}
+	if undo {
+		return setup.Uninstall()
+	}
+	if username == "" {
+		username = os.Getenv("SUDO_USER")
+	}
+	return setup.Install(username)
+}
+
+// cmdHelper roda o serviço privilegiado: usa o socket do systemd ou abre o seu próprio.
+func cmdHelper() error {
+	if os.Geteuid() != 0 {
+		return errors.New("o helper precisa rodar como root (é iniciado pelo systemd)")
+	}
+	l, err := helper.ListenFromSystemd()
+	if err != nil {
+		return err
+	}
+	if l == nil {
+		if l, err = helper.Listen(helper.SocketPath()); err != nil {
+			return err
+		}
+	}
+	return (&helper.Server{Engine: engine.ForProfile}).Serve(l)
 }
 
 func cmdDiag(a []string) error {

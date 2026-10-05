@@ -15,6 +15,11 @@ var pluginNeedles = []string{"EAP_NAK", "not supported, sending", "loading EAP_M
 var authNeedles = []string{"EAP_FAILURE", "authentication failed", "AUTH_FAILED", "MSCHAPv2 failed", "eap-mschapv2 failed"}
 
 var rules = []rule{
+	// Helper do Iron Gate (usuário comum): precisa estar instalado e o usuário no grupo.
+	{[]string{"helper.sock: connect: permission denied"},
+		"Seu usuário ainda não tem acesso ao Iron Gate. Rode 'sudo irongate setup', depois saia da sessão e entre de novo."},
+	{[]string{"helper.sock: connect: no such file", "helper.sock: connect: connection refused"},
+		"O serviço do Iron Gate não está instalado. Rode 'sudo irongate setup' uma vez para ativá-lo."},
 	{pluginNeedles,
 		"O strongSwan não tem os plugins de autenticação. Instale 'libcharon-extra-plugins' e 'libcharon-extauth-plugins' e reinicie o serviço."},
 	{authNeedles,

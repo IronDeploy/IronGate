@@ -50,7 +50,7 @@ type Service struct {
 	Engine func(*profile.Profile) (engine.Engine, error)
 }
 
-func New() *Service { return &Service{Store: creds.New(), Engine: engine.ForProfile} }
+func New() *Service { return &Service{Store: creds.New(), Engine: defaultEngine} }
 
 // basicInfo não consulta o cofre: é instantâneo, mesmo com o cofre bloqueado.
 func basicInfo(p *profile.Profile) ProfileInfo {

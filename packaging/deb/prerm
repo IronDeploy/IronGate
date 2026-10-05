@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    systemctl disable --now irongate-helper.socket || true
+    systemctl stop irongate-helper.service || true
+fi
+exit 0

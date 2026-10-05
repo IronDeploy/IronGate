@@ -1,0 +1,14 @@
+[Unit]
+Description=Iron Gate helper (acesso restrito ao strongSwan)
+Requires=irongate-helper.socket
+
+[Service]
+Type=simple
+ExecStart=@BIN@ helper
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes

@@ -8,11 +8,30 @@ Estado atual: núcleo Go + CLI da Fase 1 (Linux, FortiGate IPsec/IKEv2 com EAP-M
     ./irongate import examples/empresa-x.json
     ./irongate connect "Empresa X"
 
-## Requisitos (Linux)
+## Instalação (Linux)
 
-- strongSwan em execução (`charon-systemd` e `swanctl`).
-- No Debian/Ubuntu, instale também `libcharon-extra-plugins` (fornece o `eap-identity`) e `libcharon-extauth-plugins` (fornece o `eap-mschapv2`). Sem eles o login falha mesmo com a senha certa.
-- Secret Service (GNOME Keyring, KWallet) para salvar credenciais. Sem ele o app não grava a senha.
+O jeito mais simples é o pacote `.deb` (veja "Empacotamento" abaixo):
+
+    sudo apt install ./irongate_0.1.0_arm64.deb
+
+Ele instala as dependências, cria o grupo `irongate`, adiciona você a ele e ativa o serviço de acesso ao strongSwan. **Saia da sessão e entre de novo** para o grupo valer. Para outros usuários: `sudo usermod -aG irongate NOME`.
+
+Sem o pacote (compilando do código-fonte), instale as dependências abaixo e rode uma vez `sudo irongate setup`. Para desfazer, `sudo irongate setup --undo`.
+
+### Dependências
+
+- `strongswan-swanctl` e `charon-systemd` (o strongSwan com a interface VICI). Não deixe o `strongswan-starter` rodando junto: são dois daemons disputando o mesmo socket.
+- `libcharon-extra-plugins` (fornece o `eap-identity`) e `libcharon-extauth-plugins` (fornece o `eap-mschapv2`). Sem eles o login falha mesmo com a senha certa.
+- Secret Service (GNOME Keyring, KWallet) para salvar a senha. Sem ele o app só lembra o usuário.
+
+### Como o acesso ao strongSwan é protegido
+
+O socket do strongSwan (`/var/run/charon.vici`) equivale a root: quem fala com ele pode definir scripts (`updown`) que o charon executa como administrador. Por isso o Iron Gate **não** libera esse socket para o seu usuário. Em vez disso:
+
+- Um pequeno serviço root (`irongate-helper`, ativado por socket do systemd) atende só três operações: conectar, desconectar e consultar o estado.
+- Ele revalida o perfil (campos desconhecidos, senha no perfil e caracteres perigosos são recusados) e monta a configuração sozinho. O cliente não consegue mandar `updown` nem outra opção.
+- Só quem está no grupo `irongate` fala com o helper (`/run/irongate/helper.sock`, modo `0660`). Estar no grupo não dá acesso ao VICI.
+- A CLI e a janela rodam como o seu usuário comum e usam o helper automaticamente. Como root, falam direto com o strongSwan. `IRONGATE_DIRECT=1` força o acesso direto.
 
 ## Interface gráfica (Wails)
 
@@ -24,6 +43,12 @@ A janela fica em [gui/](gui/) e usa a mesma lógica da CLI (`internal/app`). No 
 
 (No Ubuntu 22.04 troque `libwebkit2gtk-4.1-dev` por `libwebkit2gtk-4.0-dev` e remova a tag `webkit2_41`.)
 Para desenvolver com recarga automática: `wails dev -tags webkit2_41` dentro de `gui/`.
+
+## Empacotamento
+
+    packaging/deb/build.sh 0.1.0
+
+Gera `dist/irongate_0.1.0_<arquitetura>.deb` dentro de um container Ubuntu 22.04 (a arquitetura é a do seu Docker; `PLATFORM=linux/amd64` gera amd64, emulado). Defina `MAINTAINER="Nome <email>"` para preencher o campo de mantenedor. O AppImage ainda não existe.
 
 ## Perfil
 
