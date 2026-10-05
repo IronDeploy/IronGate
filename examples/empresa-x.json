@@ -1,0 +1,8 @@
+{
+  "name": "Empresa X",
+  "engine": "ipsec-ikev2",
+  "gateway": "vpn.empresa.com.br",
+  "auth": "eap-mschapv2",
+  "username": "",
+  "allowSavePassword": true
+}
