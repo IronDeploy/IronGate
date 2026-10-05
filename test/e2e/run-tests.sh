@@ -67,6 +67,20 @@ echo "$out" | grep -q "Erro: O certificado do servidor não é confiável" || fa
 echo "$out" | grep -q "Senha ou usuário incorretos" && fail "certificado não confiável foi tratado como senha errada"
 swanctl --list-authorities 2>/dev/null | grep -q irongate && fail "autoridade do perfil ficou carregada depois de desconectar"
 
+echo "== gateway por IP: o serverId diz o nome que o certificado apresenta"
+ip=$(getent hosts gateway | awk '{print $1}')
+ca=$(awk 'BEGIN{ORS="\\n"} 1' /etc/test-ca.pem)
+printf '{"name":"Por IP","engine":"ipsec-ikev2","gateway":"%s","auth":"eap-mschapv2","allowSavePassword":false,"caCert":"%s"}' "$ip" "$ca" > /test/por-ip.json
+printf '{"name":"Por IP com nome","engine":"ipsec-ikev2","gateway":"%s","serverId":"gateway","auth":"eap-mschapv2","allowSavePassword":false,"caCert":"%s"}' "$ip" "$ca" > /test/por-ip-nome.json
+as tester irongate import /test/por-ip.json || fail "import (por IP)"
+as tester irongate import /test/por-ip-nome.json || fail "import (por IP com nome)"
+out=$(printf 'maria\nsenha123\nn\n' | as tester irongate connect "Por IP" 2>&1) && fail "conectar por IP sem serverId deveria falhar"
+echo "$out" | grep -q "Erro: O servidor recusou a identificação" || fail "mensagem de identidade ausente: $out"
+echo "$out" | grep -q "Senha ou usuário incorretos" && fail "recusa de identidade foi tratada como senha errada"
+printf 'maria\nsenha123\nn\n' | as tester irongate connect "Por IP com nome" || fail "conectar por IP com serverId deveria funcionar"
+as tester irongate status "Por IP com nome" | grep -q "conectado" || fail "status por IP com serverId"
+as tester irongate disconnect "Por IP com nome" || fail "disconnect por IP com serverId"
+
 echo "== usuário fora do grupo recebe orientação clara"
 as intruso irongate import /test/perfil.json || fail "import (intruso)"
 out=$(as intruso irongate status "Empresa X" 2>&1) && fail "intruso não deveria conseguir"

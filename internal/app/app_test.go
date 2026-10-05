@@ -31,14 +31,21 @@ type fakeEngine struct {
 	pw     string
 	cookie string
 	psk    string
+	// status é o estado devolvido por Status; vazio mantém o padrão dos testes antigos (conectado).
+	status engine.State
 }
 
 func (e *fakeEngine) Connect(_ *profile.Profile, c engine.Credentials) error {
 	e.user, e.pw, e.cookie, e.psk = c.Username, c.Password, c.Cookie, c.PSK
 	return e.err
 }
-func (e *fakeEngine) Disconnect(*profile.Profile) error             { return nil }
-func (e *fakeEngine) Status(*profile.Profile) (engine.State, error) { return engine.Connected, nil }
+func (e *fakeEngine) Disconnect(*profile.Profile) error { return nil }
+func (e *fakeEngine) Status(*profile.Profile) (engine.State, error) {
+	if e.status != "" {
+		return e.status, nil
+	}
+	return engine.Connected, nil
+}
 
 func setup(t *testing.T, allowSave bool) (*Service, *fakeEngine, fakeVault) {
 	t.Helper()
@@ -256,7 +263,8 @@ func TestSenhaErradaSalvaDescartaSoDaqueleUsuario(t *testing.T) {
 }
 
 func TestCadastroEdicaoEExclusaoDePerfil(t *testing.T) {
-	svc, _, _ := setup(t, true)
+	svc, eng, _ := setup(t, true)
+	eng.status = engine.Disconnected
 	novo := []byte(`{"name":"Filial","engine":"ipsec-ikev2","gateway":"vpn.filial.com.br","serverAuth":"psk","allowSavePassword":true}`)
 	if name, err := svc.SaveProfile(novo, "", ""); err != nil || name != "Filial" {
 		t.Fatalf("%q, %v", name, err)
@@ -318,6 +326,10 @@ func TestPSKDoCadastroVaiAoCofreENaoPedeNoLogin(t *testing.T) {
 	}
 	// Editar sem informar a PSK mantém a salva; renomear leva a PSK junto.
 	renomeado := []byte(`{"name":"Matriz SP","engine":"ipsec-ikev2","gateway":"vpn.matriz.com.br","serverAuth":"psk"}`)
+	if _, err := svc.SaveProfile(renomeado, "Matriz", ""); !errors.Is(err, ErrConnected) {
+		t.Fatalf("renomear um perfil conectado deveria falhar com ErrConnected, veio %v", err)
+	}
+	eng.status = engine.Disconnected
 	if _, err := svc.SaveProfile(renomeado, "Matriz", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -334,5 +346,30 @@ func TestPSKDoCadastroVaiAoCofreENaoPedeNoLogin(t *testing.T) {
 	}
 	if _, ok := vault["iron-gateprofile:Matriz SP:psk"]; ok {
 		t.Error("PSK não deveria sobrar num perfil por certificado")
+	}
+}
+
+func TestNaoRemovePerfilConectado(t *testing.T) {
+	svc, eng, vault := setup(t, true)
+	conectar(t, svc, "ana", "s3")
+	eng.status = engine.Connected
+	if err := svc.DeleteProfile("Empresa X"); !errors.Is(err, ErrConnected) {
+		t.Fatalf("esperava ErrConnected, veio %v", err)
+	}
+	if _, err := svc.Profile("Empresa X"); err != nil {
+		t.Fatal("o perfil conectado não pode ser removido")
+	}
+	// Desconectado, remove o perfil e tudo o que foi salvo dele.
+	eng.status = engine.Disconnected
+	if err := svc.DeleteProfile("Empresa X"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Profile("Empresa X"); err == nil {
+		t.Error("o perfil deveria ter sido removido")
+	}
+	for k := range vault {
+		if strings.Contains(k, "Empresa X") {
+			t.Errorf("sobrou credencial no cofre: %s", k)
+		}
 	}
 }

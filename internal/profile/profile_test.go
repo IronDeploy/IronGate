@@ -141,3 +141,30 @@ func TestIPsecPSKeIKEv1(t *testing.T) {
 		}
 	}
 }
+
+func TestServerID(t *testing.T) {
+	ok := `{"name":"A","gateway":"192.0.2.10","serverId":"gateway.empresa.com.br"}`
+	p, err := Parse([]byte(ok))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.ExpectedServerID() != "gateway.empresa.com.br" {
+		t.Errorf("ExpectedServerID = %q", p.ExpectedServerID())
+	}
+	if sem, _ := Parse([]byte(`{"name":"A","gateway":"vpn.exemplo.com"}`)); sem.ExpectedServerID() != "vpn.exemplo.com" {
+		t.Errorf("sem serverId deveria usar o gateway, veio %q", sem.ExpectedServerID())
+	}
+	bad := []string{
+		`{"name":"A","gateway":"a.b","serverId":"http://a.b"}`,                                     // formato
+		`{"name":"A","gateway":"a.b","serverId":"a b"}`,                                            // espaço
+		`{"name":"A","gateway":"a.b","serverId":"x.com\n"}`,                                        // injeção
+		`{"name":"A","gateway":"a.b","serverAuth":"psk","serverId":"x.com"}`,                       // PSK não usa certificado
+		`{"name":"A","gateway":"a.b","ikeVersion":1,"serverAuth":"psk","serverId":"x.com"}`,        // IKEv1 exige PSK
+		`{"name":"A","engine":"openconnect","protocol":"fortinet","gateway":"a.b","serverId":"x"}`, // outro motor
+	}
+	for _, j := range bad {
+		if _, err := Parse([]byte(j)); err == nil {
+			t.Errorf("deveria falhar: %s", j)
+		}
+	}
+}

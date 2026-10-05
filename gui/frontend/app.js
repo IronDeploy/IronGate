@@ -271,7 +271,8 @@ function updateForm() {
   const t = formType();
   const fortinet = $("f-protocol").value === "fortinet";
   const saml = t === "ssl" && fortinet && $("f-sslauth").value === "saml";
-  const on = { ssl: t === "ssl", ipsec: t !== "ssl", ipsec1: t === "ipsec1", "ssl-saml": saml };
+  const certServer = t === "ipsec2" && $("f-serverauth").value === "cert";
+  const on = { ssl: t === "ssl", ipsec: t !== "ssl", ipsec1: t === "ipsec1", "ssl-saml": saml, "ipsec-cert": certServer };
   document.querySelectorAll("#form [data-show]").forEach((el) => { el.hidden = !on[el.dataset.show]; });
   // Login único só existe no FortiGate; no IKEv1 a PSK é obrigatória.
   $("f-sslauth").querySelector('option[value=saml]').disabled = !fortinet;
@@ -282,7 +283,7 @@ function updateForm() {
 }
 
 function resetForm() {
-  for (const id of ["f-psk", "f-name", "f-gateway", "f-port", "f-localid", "f-ike", "f-esp", "f-authgroup", "f-pin", "f-samlport", "f-ca"]) $(id).value = "";
+  for (const id of ["f-psk", "f-serverid", "f-name", "f-gateway", "f-port", "f-localid", "f-ike", "f-esp", "f-authgroup", "f-pin", "f-samlport", "f-ca"]) $(id).value = "";
   $("f-type").value = "ipsec2";
   $("f-protocol").value = "fortinet";
   $("f-sslauth").value = "password";
@@ -313,11 +314,12 @@ function fillForm(p) {
     $("f-serverauth").value = p.serverAuth || "cert";
     $("f-aggressive").checked = !!p.aggressive;
     $("f-localid").value = p.localId || "";
+    $("f-serverid").value = p.serverId || "";
     $("f-ike").value = p.ike || "";
     $("f-esp").value = p.esp || "";
   }
   if (info && info.Name === p.name && info.HasSavedPSK) $("f-psk").placeholder = SAVED_HINT + ": deixe vazio para manter";
-  if (p.caCert || p.ike || p.esp || p.authGroup || p.serverCertPin || p.samlPort) $("f-adv").open = true;
+  if (p.caCert || p.serverId || p.ike || p.esp || p.authGroup || p.serverCertPin || p.samlPort) $("f-adv").open = true;
   updateForm();
 }
 
@@ -357,6 +359,7 @@ function buildProfile() {
     } else {
       p.auth = "eap-mschapv2";
     }
+    if (p.serverAuth === "cert") put("serverId", fv("f-serverid"));
     put("ike", fv("f-ike"));
     put("esp", fv("f-esp"));
   }

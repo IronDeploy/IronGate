@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -32,6 +34,8 @@ func Run(ctx context.Context, p *profile.Profile) []Result {
 	}
 	out = append(out, Result{"DNS", true, fmt.Sprintf("%s -> %s", gateway, addrs[0])})
 
+	out = append(out, localChecks(p)...)
+
 	if p.Engine == profile.EngineOpenConnect {
 		port := "443"
 		if p.Port != 0 {
@@ -53,6 +57,30 @@ func Run(ctx context.Context, p *profile.Profile) []Result {
 		}
 		c.Close()
 		out = append(out, Result{"UDP " + port, true, "porta acessível localmente (UDP não confirma resposta do servidor)"})
+	}
+	return out
+}
+
+// localChecks confere o que precisa estar instalado e rodando neste computador para o motor do perfil.
+func localChecks(p *profile.Profile) []Result {
+	var out []Result
+	switch p.Engine {
+	case profile.EngineIPsecIKEv2:
+		if runtime.GOOS != "linux" {
+			return nil
+		}
+		if r := checkPlugins(pluginDirs, requiredPlugins(p)); r != nil {
+			out = append(out, *r)
+		}
+		if r := checkDaemons("/proc"); r != nil {
+			out = append(out, *r)
+		}
+	case profile.EngineOpenConnect:
+		if _, err := exec.LookPath("openconnect"); err != nil {
+			out = append(out, Result{"openconnect", false, "O openconnect não está instalado. Instale: sudo apt install openconnect"})
+		} else {
+			out = append(out, Result{"openconnect", true, "instalado"})
+		}
 	}
 	return out
 }

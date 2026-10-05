@@ -72,7 +72,7 @@ func TestCertificadoNaoConfiavelNaoEhSenhaErrada(t *testing.T) {
 func TestRecusaDeIdentidadeNaoEhSenhaErrada(t *testing.T) {
 	// Log real: o servidor responde AUTH_FAILED ao primeiro IKE_AUTH, antes de qualquer etapa de EAP.
 	err := errors.New("vici: command failed: parsed IKE_AUTH response 1 [ N(AUTH_FAILED) ]; received AUTHENTICATION_FAILED notify error")
-	if got := Friendly(err); !strings.Contains(got, "identificação") {
+	if got := Friendly(err); !strings.Contains(got, "identificação") || !strings.Contains(got, "serverId") {
 		t.Errorf("mensagem = %q", got)
 	}
 	if IsAuthFailure(err) {

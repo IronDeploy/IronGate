@@ -71,6 +71,7 @@ Campos do IPsec (`ipsec-ikev2`), equivalentes aos do FortiClient em "VPN IPsec":
 | Campo | Descrição |
 |---|---|
 | `serverAuth` | `cert` (padrão, certificado do servidor) ou `psk` (chave pré-compartilhada). A PSK é pedida na primeira conexão e guardada só no cofre do sistema, nunca no perfil |
+| `serverId` | Nome que o certificado do servidor apresenta, quando difere do `gateway` (por exemplo, o gateway é um IP). Só vale com `serverAuth: cert` |
 | `ikeVersion` | `2` (padrão, com EAP) ou `1` (exige `serverAuth: psk` e `auth: xauth`) |
 | `aggressive` | IKEv1: modo agressivo |
 | `localId` | IKEv1: ID de grupo/local (o "ID local" do FortiClient) |

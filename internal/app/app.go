@@ -289,6 +289,9 @@ func (s *Service) SaveProfile(data []byte, previous, psk string) (string, error)
 	if err != nil {
 		return "", err
 	}
+	if previous != "" && previous != p.Name && s.isConnected(previous) {
+		return "", ErrConnected // renomear apagaria o perfil antigo com o túnel ainda de pé
+	}
 	if previous != p.Name { // novo, ou renomeado: não pode sobrescrever outro perfil
 		if _, err := profile.Load(p.Name); err == nil {
 			return "", fmt.Errorf("já existe um perfil chamado %q", p.Name)
@@ -314,8 +317,21 @@ func (s *Service) SaveProfile(data []byte, previous, psk string) (string, error)
 	return p.Name, nil
 }
 
-// DeleteProfile apaga o perfil e tudo o que foi salvo dele.
+// ErrConnected impede remover um perfil enquanto a VPN dele está conectada: a janela e a CLI perderiam o
+// controle de um túnel que continuaria de pé.
+var ErrConnected = errors.New("este perfil está conectado: desconecte antes de removê-lo")
+
+// isConnected diz se a VPN do perfil está conectada. Se o estado não puder ser consultado, não bloqueia.
+func (s *Service) isConnected(name string) bool {
+	st, err := s.Status(name)
+	return err == nil && st == engine.Connected
+}
+
+// DeleteProfile apaga o perfil e tudo o que foi salvo dele (usuários, senhas e PSK).
 func (s *Service) DeleteProfile(name string) error {
+	if s.isConnected(name) {
+		return ErrConnected
+	}
 	_ = s.Store.Forget(name)
 	return profile.Delete(name)
 }

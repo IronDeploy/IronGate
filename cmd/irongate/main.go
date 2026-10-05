@@ -28,6 +28,7 @@ Uso:
   irongate connect <perfil>        conecta (pergunta usuário/senha se preciso)
   irongate disconnect <perfil>     desconecta
   irongate status <perfil>         mostra o estado
+  irongate remove <perfil> [--yes] remove o perfil e tudo o que foi salvo dele
   irongate forget <perfil>         esquece usuário e senha salvos
   irongate diag <perfil>           diagnostica problemas de conexão
   sudo irongate setup [--user NOME] [--undo]
@@ -52,6 +53,8 @@ func main() {
 		err = need(args, 1, cmdDisconnect)
 	case "status":
 		err = need(args, 1, cmdStatus)
+	case "remove":
+		err = cmdRemove(args)
 	case "forget":
 		err = need(args, 1, cmdForget)
 	case "diag":
@@ -180,6 +183,35 @@ func cmdStatus(a []string) error {
 		return err
 	}
 	fmt.Println(st)
+	return nil
+}
+
+// cmdRemove remove um perfil pedindo confirmação (--yes dispensa, para scripts).
+func cmdRemove(args []string) error {
+	yes := false
+	var names []string
+	for _, a := range args {
+		if a == "--yes" || a == "-y" {
+			yes = true
+		} else {
+			names = append(names, a)
+		}
+	}
+	if len(names) != 1 {
+		return errors.New("argumentos inválidos; veja 'irongate help'")
+	}
+	name := names[0]
+	if _, err := svc.Profile(name); err != nil {
+		return err
+	}
+	if !yes && !strings.EqualFold(prompt(fmt.Sprintf("Remover o perfil %q e as credenciais salvas dele? [s/N]: ", name)), "s") {
+		fmt.Println("Nada foi removido.")
+		return nil
+	}
+	if err := svc.DeleteProfile(name); err != nil {
+		return err
+	}
+	fmt.Printf("Perfil %q removido.\n", name)
 	return nil
 }
 
