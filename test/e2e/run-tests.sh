@@ -67,6 +67,17 @@ echo "$out" | grep -q "Erro: O certificado do servidor não é confiável" || fa
 echo "$out" | grep -q "Senha ou usuário incorretos" && fail "certificado não confiável foi tratado como senha errada"
 swanctl --list-authorities 2>/dev/null | grep -q irongate && fail "autoridade do perfil ficou carregada depois de desconectar"
 
+echo "== com um perfil conectado, o CA dele não valida o servidor de outro perfil"
+# "Empresa X" fica conectado (o CA dele está carregado no daemon). "CA errado" aponta para o mesmo servidor, mas
+# confia só em outro CA: precisa falhar, mesmo com o CA do servidor carregado por causa do perfil conectado.
+other=$(awk 'BEGIN{ORS="\\n"} 1' /etc/test-other-ca.pem)
+printf '{"name":"CA errado","engine":"ipsec-ikev2","gateway":"gateway","auth":"eap-mschapv2","allowSavePassword":false,"caCert":"%s"}' "$other" > /test/ca-errado.json
+as tester irongate import /test/ca-errado.json || fail "import (CA errado)"
+printf 'maria\nsenha123\nn\n' | as tester irongate connect "Empresa X" || fail "connect (Empresa X, antes do CA errado)"
+out=$(printf 'maria\nsenha123\nn\n' | as tester irongate connect "CA errado" 2>&1) && fail "o CA de um perfil validou o servidor de outro"
+echo "$out" | grep -q "Erro: O certificado do servidor não é confiável" || fail "mensagem de certificado ausente: $out"
+as tester irongate disconnect "Empresa X" || fail "disconnect (Empresa X)"
+
 echo "== gateway por IP: o serverId diz o nome que o certificado apresenta"
 ip=$(getent hosts gateway | awk '{print $1}')
 ca=$(awk 'BEGIN{ORS="\\n"} 1' /etc/test-ca.pem)

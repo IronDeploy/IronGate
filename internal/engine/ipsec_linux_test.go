@@ -98,3 +98,23 @@ func TestConnMessageUsaServerIDComoIdentidadeDoServidor(t *testing.T) {
 		t.Errorf("remote_addrs = %v", addrs)
 	}
 }
+
+func TestConnMessageRestringeOCAPorConexao(t *testing.T) {
+	p := &profile.Profile{Name: "X", Engine: profile.EngineIPsecIKEv2, Gateway: "g.exemplo.com", Auth: profile.AuthEAPMSCHAPv2, CACert: "PEM-DO-CA"}
+	remote := ConnMessage(p, "maria")["irongate-X"].(map[string]any)["remote"].(map[string]any)
+	if got, _ := remote["cacerts"].([]string); len(got) != 1 || got[0] != "PEM-DO-CA" {
+		t.Errorf("cacerts = %v", remote["cacerts"])
+	}
+
+	p.CACert = ""
+	remote = ConnMessage(p, "maria")["irongate-X"].(map[string]any)["remote"].(map[string]any)
+	if _, ok := remote["cacerts"]; ok {
+		t.Errorf("perfil sem CA não deve fixar cacerts: %v", remote)
+	}
+
+	p.CACert, p.ServerAuth = "PEM-DO-CA", "psk"
+	remote = ConnMessage(p, "maria")["irongate-X"].(map[string]any)["remote"].(map[string]any)
+	if _, ok := remote["cacerts"]; ok {
+		t.Errorf("PSK não usa CA: %v", remote)
+	}
+}

@@ -23,6 +23,10 @@ func ConnMessage(p *profile.Profile, username string) map[string]any {
 	if p.UsesPSK() {
 		// O servidor se prova pela PSK. Sem id fixo: o identificador do FortiGate varia (IP, nome ou vazio).
 		remote = map[string]any{"auth": "psk", "id": "%any"}
+	} else if p.CACert != "" {
+		// Restringe a confiança por conexão: o certificado do servidor tem de encadear até o CA deste perfil.
+		// Só carregar a autoridade não basta, pois ela fica confiável para qualquer conexão do mesmo daemon.
+		remote["cacerts"] = []string{p.CACert}
 	}
 	conn := map[string]any{
 		"version":      "2",
