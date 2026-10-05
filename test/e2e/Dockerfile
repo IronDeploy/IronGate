@@ -33,8 +33,8 @@ COPY test/e2e/server-entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
 FROM base AS client
-COPY --from=pki /pki/ca.pem /etc/swanctl/x509ca/ca.pem
+# O CA fica fora de /etc/swanctl de propósito: o irongate deve carregá-lo a partir do perfil.
+COPY --from=pki /pki/ca.pem /etc/test-ca.pem
 COPY --from=build /irongate /usr/local/bin/irongate
-COPY examples/empresa-x.json /test/perfil.json
 COPY test/e2e/run-tests.sh /run-tests.sh
 ENTRYPOINT ["/run-tests.sh"]

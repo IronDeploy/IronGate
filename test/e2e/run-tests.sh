@@ -5,12 +5,14 @@ fail() { echo "FALHOU: $*"; exit 1; }
 
 /usr/lib/ipsec/charon &
 for i in $(seq 1 30); do swanctl --stats >/dev/null 2>&1 && break; sleep 1; done
-swanctl --load-creds || fail "carregar CA"
 export IRONGATE_DEBUG=1
 for i in $(seq 1 30); do getent hosts gateway >/dev/null && break; sleep 1; done
 
+mkdir -p /test
+# O CA vai dentro do perfil (como o TI faria), não em /etc/swanctl.
+ca=$(awk 'BEGIN{ORS="\\n"} 1' /etc/test-ca.pem)
+printf '{"name":"Empresa X","engine":"ipsec-ikev2","gateway":"gateway","auth":"eap-mschapv2","allowSavePassword":true,"caCert":"%s"}' "$ca" > /test/perfil.json
 irongate import /test/perfil.json || fail "import"
-sed -i 's/vpn.empresa.com.br/gateway/' /root/.config/iron-gate/profiles/*.json
 
 echo "== senha errada"
 out=$(printf 'maria\nerrada\nn\n' | irongate connect "Empresa X" 2>&1) && fail "senha errada deveria falhar"

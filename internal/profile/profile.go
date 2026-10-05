@@ -3,7 +3,9 @@ package profile
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
@@ -24,6 +26,9 @@ type Profile struct {
 	Auth              string `json:"auth"`
 	Username          string `json:"username"`
 	AllowSavePassword bool   `json:"allowSavePassword"`
+	// CACert é o certificado (PEM) da autoridade que assinou o certificado do servidor. Opcional:
+	// sem ele vale o que o strongSwan já confia no sistema. Certificado público, nunca chave privada.
+	CACert string `json:"caCert,omitempty"`
 }
 
 var (
@@ -67,6 +72,25 @@ func (p *Profile) Validate() error {
 	}
 	if strings.ContainsAny(p.Username, "\r\n\"\\{}#") {
 		return errors.New("perfil inválido: 'username' contém caracteres não permitidos")
+	}
+	if p.CACert != "" {
+		if err := validateCA(p.CACert); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateCA exige exatamente um certificado de CA em PEM, e recusa qualquer chave privada.
+func validateCA(data string) error {
+	bad := errors.New("perfil inválido: 'caCert' deve ser um certificado de CA em formato PEM")
+	block, rest := pem.Decode([]byte(data))
+	if block == nil || block.Type != "CERTIFICATE" || len(bytes.TrimSpace(rest)) > 0 {
+		return bad
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil || !cert.IsCA {
+		return bad
 	}
 	return nil
 }

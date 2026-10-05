@@ -19,7 +19,7 @@ var rules = []rule{
 		"O servidor recusou o tipo de criptografia. Peça ao TI um perfil atualizado."},
 	{[]string{"unable to resolve", "no such host", "name resolution", "lookup"},
 		"Não consegui encontrar o endereço do servidor. Verifique o endereço e sua internet."},
-	{[]string{"connection refused", "dial unix", "no such file or directory"},
+	{[]string{"connection refused", "dial unix"},
 		"O serviço de VPN (strongSwan) não está rodando. Instale e inicie: sudo systemctl start strongswan"},
 	{[]string{"permission denied", "access denied"},
 		"Sem permissão para controlar a VPN. Execute como administrador ou ajuste as permissões do strongSwan."},

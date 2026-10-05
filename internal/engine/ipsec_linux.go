@@ -48,6 +48,17 @@ func (*ipsec) Connect(p *profile.Profile, c Credentials) error {
 	}
 	defer s.Close()
 
+	if p.CACert != "" {
+		// Confiança só em memória, sem escrever em /etc/swanctl.
+		cert, err := vici.MarshalMessage(map[string]any{"type": "X509", "flag": "CA", "data": p.CACert})
+		if err != nil {
+			return err
+		}
+		if err := check(s.CommandRequest("load-cert", cert)); err != nil {
+			return err
+		}
+	}
+
 	conn, err := vici.MarshalMessage(ConnMessage(p, c.Username))
 	if err != nil {
 		return err

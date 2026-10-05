@@ -11,6 +11,9 @@ func TestFriendly(t *testing.T) {
 		"received EAP_FAILURE":           "Senha",
 		"retransmit giving up":           "não respondeu",
 		"dial unix /var/run/charon.vici": "strongSwan",
+		// Regressões: erros que não são do strongSwan não podem virar "serviço parado".
+		"vici: command failed: establishing CHILD_SA failed": "Falhou:",
+		"open /x/perfil.json: no such file or directory":     "Falhou:",
 	}
 	for in, want := range cases {
 		if got := Friendly(errors.New(in)); !strings.Contains(got, want) {
