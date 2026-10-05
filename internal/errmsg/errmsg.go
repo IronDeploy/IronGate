@@ -59,7 +59,8 @@ var rules = []rule{
 		"Sem permissão para controlar a VPN. Execute como administrador ou ajuste as permissões do strongSwan."},
 }
 
-// Friendly devolve uma mensagem amigável; sem correspondência, devolve o erro original.
+// Friendly devolve uma mensagem amigável; sem correspondência, devolve o erro original
+// sem prefixo (a CLI acrescenta o seu "Erro: ").
 func Friendly(err error) string {
 	if err == nil {
 		return ""
@@ -75,7 +76,7 @@ func Friendly(err error) string {
 			}
 		}
 	}
-	return "Falhou: " + err.Error()
+	return err.Error()
 }
 
 func matchesAny(low string, needles []string) bool {
