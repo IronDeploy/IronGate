@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iron Gate</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Iron Gate</h1>
+      <span id="badge" class="badge off">desconectado</span>
+    </header>
+
+    <section id="empty" hidden>
+      <p>Nenhum perfil ainda. Peça ao TI o arquivo do perfil da VPN e importe aqui.</p>
+      <button id="import-first" class="primary">Importar perfil</button>
+    </section>
+
+    <section id="main" hidden>
+      <label for="profile">Perfil</label>
+      <div class="row">
+        <select id="profile"></select>
+        <button id="import" class="ghost" title="Importar outro perfil">Importar</button>
+      </div>
+      <p id="gateway" class="muted"></p>
+
+      <label for="user">Usuário</label>
+      <input id="user" autocomplete="username" spellcheck="false">
+
+      <label for="pass">Senha</label>
+      <input id="pass" type="password" autocomplete="current-password">
+
+      <fieldset id="remember">
+        <legend>Lembrar neste computador</legend>
+        <label class="opt"><input type="radio" name="remember" value="none" checked> Não lembrar</label>
+        <label class="opt"><input type="radio" name="remember" value="user"> Só o usuário</label>
+        <label class="opt"><input type="radio" name="remember" value="password" id="remember-password"> Usuário e senha</label>
+        <p id="remember-hint" class="muted" hidden></p>
+      </fieldset>
+
+      <button id="action" class="primary">Conectar</button>
+      <p id="msg" role="status" hidden></p>
+
+      <div class="links">
+        <button id="diag" class="link">Diagnóstico</button>
+        <button id="forget" class="link">Esquecer credenciais</button>
+      </div>
+      <ul id="diag-list" hidden></ul>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

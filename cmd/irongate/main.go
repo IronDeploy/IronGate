@@ -10,13 +10,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/irondeploy/iron-gate/internal/creds"
-	"github.com/irondeploy/iron-gate/internal/diag"
-	"github.com/irondeploy/iron-gate/internal/engine"
+	"github.com/irondeploy/iron-gate/internal/app"
 	"github.com/irondeploy/iron-gate/internal/errmsg"
-	"github.com/irondeploy/iron-gate/internal/profile"
 	"golang.org/x/term"
 )
+
+var svc = app.New()
 
 const usage = `Iron Gate - a VPN corporativa em um clique
 
@@ -79,19 +78,16 @@ func cmdImport(a []string) error {
 	if err != nil {
 		return err
 	}
-	p, err := profile.Parse(b)
+	name, err := svc.Import(b)
 	if err != nil {
 		return err
 	}
-	if err := profile.Save(p); err != nil {
-		return err
-	}
-	fmt.Printf("Perfil %q importado.\n", p.Name)
+	fmt.Printf("Perfil %q importado.\n", name)
 	return nil
 }
 
 func cmdList() error {
-	ps, _ := profile.List()
+	ps := svc.Profiles()
 	if len(ps) == 0 {
 		fmt.Println("Nenhum perfil. Use 'irongate import <arquivo.json>'.")
 	}
@@ -102,53 +98,34 @@ func cmdList() error {
 }
 
 func cmdConnect(a []string) error {
-	p, err := profile.Load(a[0])
+	info, err := svc.Profile(a[0])
 	if err != nil {
 		return err
 	}
-	eng, err := engine.ForProfile(p)
+	req := app.ConnectRequest{Profile: info.Name}
+	if info.SavedUsername == "" {
+		req.Username = prompt("Usuário: ")
+	}
+	if !info.HasSavedPassword {
+		req.Password = promptSecret("Senha: ")
+		req.Remember = askRemember(info)
+	}
+
+	res, err := svc.Connect(req)
+	for _, w := range res.Warnings {
+		fmt.Fprintln(os.Stderr, "Aviso:", w)
+	}
 	if err != nil {
-		return err
-	}
-	store := creds.New()
-
-	user := p.Username
-	if user == "" {
-		user, _ = store.Username(p.Name)
-	}
-	pw := ""
-	if p.AllowSavePassword {
-		pw, _ = store.Password(p.Name)
-	}
-	fromVault := pw != ""
-
-	if user == "" {
-		user = prompt("Usuário: ")
-	}
-	if pw == "" {
-		pw = promptSecret("Senha: ")
-	}
-
-	err = eng.Connect(p, engine.Credentials{Username: user, Password: pw})
-	if err != nil {
-		if errmsg.IsAuthFailure(err) && fromVault {
-			_ = store.Forget(p.Name) // senha salva está errada/expirada: pede de novo na próxima
-			fmt.Fprintln(os.Stderr, "A senha salva foi descartada. Rode 'connect' de novo para informar a nova.")
-		}
 		return err
 	}
 	fmt.Println("Conectado.")
-
-	if !fromVault {
-		offerSave(p, store, user, pw)
-	}
 	return nil
 }
 
-// offerSave pergunta o nível de lembrança. allowSavePassword=false do TI desativa a senha.
-func offerSave(p *profile.Profile, store *creds.Store, user, pw string) {
-	canSavePassword := p.AllowSavePassword && store.Available()
-	if p.AllowSavePassword && !canSavePassword {
+// askRemember pergunta o nível de lembrança. allowSavePassword=false do TI e a falta de cofre tiram a opção da senha.
+func askRemember(info app.ProfileInfo) app.Remember {
+	canSavePassword := info.AllowSavePassword && svc.VaultAvailable()
+	if info.AllowSavePassword && !canSavePassword {
 		fmt.Println("Não encontrei o cofre de senhas do sistema (Secret Service). Posso lembrar só o usuário; a senha não é gravada em arquivo.")
 	}
 	opts := "[n] não lembrar  [u] só usuário"
@@ -157,42 +134,34 @@ func offerSave(p *profile.Profile, store *creds.Store, user, pw string) {
 	}
 	switch strings.ToLower(prompt("Lembrar? " + opts + ": ")) {
 	case "u":
-		_ = store.SaveUsername(p.Name, user)
+		return app.RememberUser
 	case "s":
 		if canSavePassword {
-			_ = store.SaveUsername(p.Name, user)
-			fmt.Println("Para salvar a senha, informe-a novamente.")
-			pw := promptSecret("Senha: ")
-			if err := store.SavePassword(p.Name, pw); err != nil {
-				fmt.Fprintln(os.Stderr, "Aviso:", err)
-			}
+			return app.RememberPassword
 		}
 	}
+	return app.RememberNone
 }
 
 func cmdDisconnect(a []string) error {
-	return withEngine(a[0], func(p *profile.Profile, e engine.Engine) error {
-		if err := e.Disconnect(p); err != nil {
-			return err
-		}
-		fmt.Println("Desconectado.")
-		return nil
-	})
+	if err := svc.Disconnect(a[0]); err != nil {
+		return err
+	}
+	fmt.Println("Desconectado.")
+	return nil
 }
 
 func cmdStatus(a []string) error {
-	return withEngine(a[0], func(p *profile.Profile, e engine.Engine) error {
-		st, err := e.Status(p)
-		if err != nil {
-			return err
-		}
-		fmt.Println(st)
-		return nil
-	})
+	st, err := svc.Status(a[0])
+	if err != nil {
+		return err
+	}
+	fmt.Println(st)
+	return nil
 }
 
 func cmdForget(a []string) error {
-	if err := creds.New().Forget(a[0]); err != nil {
+	if err := svc.Forget(a[0]); err != nil {
 		return err
 	}
 	fmt.Println("Credenciais esquecidas.")
@@ -200,11 +169,11 @@ func cmdForget(a []string) error {
 }
 
 func cmdDiag(a []string) error {
-	p, err := profile.Load(a[0])
+	rs, err := svc.Diag(context.Background(), a[0])
 	if err != nil {
 		return err
 	}
-	for _, r := range diag.Run(context.Background(), p.Gateway) {
+	for _, r := range rs {
 		mark := "OK "
 		if !r.OK {
 			mark = "ERRO"
@@ -212,18 +181,6 @@ func cmdDiag(a []string) error {
 		fmt.Printf("[%s] %s: %s\n", mark, r.Check, r.Hint)
 	}
 	return nil
-}
-
-func withEngine(name string, f func(*profile.Profile, engine.Engine) error) error {
-	p, err := profile.Load(name)
-	if err != nil {
-		return err
-	}
-	e, err := engine.ForProfile(p)
-	if err != nil {
-		return err
-	}
-	return f(p, e)
 }
 
 // stdin é compartilhado para que a entrada via pipe não se perca entre perguntas.

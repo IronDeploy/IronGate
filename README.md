@@ -14,6 +14,17 @@ Estado atual: núcleo Go + CLI da Fase 1 (Linux, FortiGate IPsec/IKEv2 com EAP-M
 - No Debian/Ubuntu, instale também `libcharon-extauth-plugins`: é ele que fornece o `eap-mschapv2`. Sem ele o servidor recusa o login.
 - Secret Service (GNOME Keyring, KWallet) para salvar credenciais. Sem ele o app não grava a senha.
 
+## Interface gráfica (Wails)
+
+A janela fica em [gui/](gui/) e usa a mesma lógica da CLI (`internal/app`). No Ubuntu 24.04:
+
+    sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config
+    go build -tags "desktop,production,webkit2_41" -o irongate-gui ./gui
+    ./irongate-gui
+
+(No Ubuntu 22.04 troque `libwebkit2gtk-4.1-dev` por `libwebkit2gtk-4.0-dev` e remova a tag `webkit2_41`.)
+Para desenvolver com recarga automática: `wails dev -tags webkit2_41` dentro de `gui/`.
+
 ## Perfil
 
 Perfis nunca contêm senha; a senha vai ao strongSwan pelo socket VICI, sem arquivo nem argv.

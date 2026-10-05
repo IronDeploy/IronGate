@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/zalando/go-keyring"
 )
@@ -74,5 +75,38 @@ func TestSemCofreGuardaSoUsuario(t *testing.T) {
 	}
 	if _, err := s.Username("Empresa X"); !errors.Is(err, ErrNotFound) {
 		t.Fatal("usuário deveria ter sido esquecido")
+	}
+}
+
+// bloqueado simula um cofre trancado que nunca responde.
+type bloqueado struct{ release chan struct{} }
+
+func (b bloqueado) Get(s, u string) (string, error) { <-b.release; return "", nil }
+func (b bloqueado) Set(s, u, p string) error        { <-b.release; return nil }
+func (b bloqueado) Delete(s, u string) error        { <-b.release; return nil }
+
+func TestCofreBloqueadoNaoTravaOApp(t *testing.T) {
+	old := vaultTimeout
+	vaultTimeout = 50 * time.Millisecond
+	defer func() { vaultTimeout = old }()
+	b := bloqueado{release: make(chan struct{})}
+	defer close(b.release)
+
+	s := NewWith(b, t.TempDir())
+	start := time.Now()
+	if s.Available() {
+		t.Fatal("cofre que não responde deve contar como indisponível")
+	}
+	if _, err := s.Username("p"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("sem cofre e sem arquivo: err = %v", err)
+	}
+	if err := s.SaveUsername("p", "ana"); err != nil {
+		t.Fatal(err) // cai no arquivo
+	}
+	if u, _ := s.Username("p"); u != "ana" {
+		t.Fatalf("usuário = %q", u)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("demorou %v: o app travaria", d)
 	}
 }
