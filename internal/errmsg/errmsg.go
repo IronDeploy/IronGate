@@ -64,7 +64,7 @@ func Friendly(err error) string {
 	if err == nil {
 		return ""
 	}
-	if strings.Contains(err.Error(), "desconecte antes de removê-lo") {
+	if strings.Contains(err.Error(), "desconecte antes de removê-lo") || strings.Contains(err.Error(), "desconecte antes de conectar outro") {
 		return err.Error() // já é uma mensagem para o usuário
 	}
 	low := strings.ToLower(err.Error())

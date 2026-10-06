@@ -81,6 +81,12 @@ printf 'maria\nsenha123\nn\n' | as tester irongate connect "Por IP com nome" || 
 as tester irongate status "Por IP com nome" | grep -q "conectado" || fail "status por IP com serverId"
 as tester irongate disconnect "Por IP com nome" || fail "disconnect por IP com serverId"
 
+echo "== com um perfil conectado, um segundo perfil é bloqueado"
+printf 'maria\nsenha123\nn\n' | as tester irongate connect "Por IP com nome" || fail "connect (primeiro perfil)"
+out=$(printf 'maria\nsenha123\nn\n' | as tester irongate connect "Sem CA" 2>&1) && fail "segunda conexão deveria ser bloqueada"
+echo "$out" | grep -q 'Erro: o perfil "Por IP com nome" já está conectado' || fail "mensagem de bloqueio ausente: $out"
+as tester irongate disconnect "Por IP com nome" || fail "disconnect (primeiro perfil)"
+
 echo "== usuário fora do grupo recebe orientação clara"
 as intruso irongate import /test/perfil.json || fail "import (intruso)"
 out=$(as intruso irongate status "Empresa X" 2>&1) && fail "intruso não deveria conseguir"

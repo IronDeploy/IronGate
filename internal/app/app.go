@@ -146,6 +146,9 @@ func (s *Service) Connect(req ConnectRequest) (Result, error) {
 	if err != nil {
 		return res, err
 	}
+	if other := s.otherConnected(p.Name); other != "" {
+		return res, &OtherConnectedError{Name: other}
+	}
 
 	if p.Auth == profile.AuthSAML {
 		// O login é no navegador: nada de usuário, senha nem cofre.
@@ -315,6 +318,26 @@ func (s *Service) SaveProfile(data []byte, previous, psk string) (string, error)
 		_ = s.DeleteProfile(previous)
 	}
 	return p.Name, nil
+}
+
+// OtherConnectedError impede conectar um perfil enquanto outro está conectado: duas VPNs ao mesmo tempo
+// disputam rotas, DNS e IP virtual, e o resultado é imprevisível.
+type OtherConnectedError struct{ Name string }
+
+func (e *OtherConnectedError) Error() string {
+	return fmt.Sprintf("o perfil %q já está conectado: desconecte antes de conectar outro", e.Name)
+}
+
+// otherConnected devolve o nome de outro perfil conectado, ou "" se não houver. Se o estado de um perfil não
+// puder ser consultado, não bloqueia (como em isConnected).
+func (s *Service) otherConnected(name string) string {
+	ps, _ := profile.List()
+	for _, p := range ps {
+		if p.Name != name && s.isConnected(p.Name) {
+			return p.Name
+		}
+	}
+	return ""
 }
 
 // ErrConnected impede remover um perfil enquanto a VPN dele está conectada: a janela e a CLI perderiam o

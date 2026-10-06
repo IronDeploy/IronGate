@@ -10,6 +10,7 @@ import (
 
 	"github.com/irondeploy/iron-gate/internal/creds"
 	"github.com/irondeploy/iron-gate/internal/engine"
+	"github.com/irondeploy/iron-gate/internal/errmsg"
 	"github.com/irondeploy/iron-gate/internal/profile"
 	"github.com/zalando/go-keyring"
 )
@@ -167,6 +168,7 @@ func TestLoginUnicoNaoPedeSenhaNemUsaCofre(t *testing.T) {
 	if _, err := svc.Import([]byte(`{"name":"SSO","engine":"openconnect","protocol":"fortinet","auth":"saml","gateway":"vpn.exemplo.com","port":8443}`)); err != nil {
 		t.Fatal(err)
 	}
+	eng.status = engine.Disconnected // o fake responde por todos os perfis: nenhum outro está conectado
 	svc.SAML = func(context.Context, *profile.Profile) (string, error) { return "SVPNCOOKIE=x", nil }
 	if _, err := svc.Connect(ConnectRequest{Profile: "SSO", Remember: RememberPassword}); err != nil {
 		t.Fatal(err)
@@ -318,12 +320,14 @@ func TestPSKDoCadastroVaiAoCofreENaoPedeNoLogin(t *testing.T) {
 		t.Fatalf("info = %+v", info)
 	}
 	// Conectar com usuário e senha apenas: a PSK vem do cofre.
+	eng.status = engine.Disconnected // o fake responde por todos os perfis: nenhum outro está conectado
 	if _, err := svc.Connect(ConnectRequest{Profile: "Matriz", Username: "ana", Password: "s3"}); err != nil {
 		t.Fatal(err)
 	}
 	if eng.psk != "psk-da-empresa" {
 		t.Fatalf("o motor recebeu a PSK %q", eng.psk)
 	}
+	eng.status = engine.Connected
 	// Editar sem informar a PSK mantém a salva; renomear leva a PSK junto.
 	renomeado := []byte(`{"name":"Matriz SP","engine":"ipsec-ikev2","gateway":"vpn.matriz.com.br","serverAuth":"psk"}`)
 	if _, err := svc.SaveProfile(renomeado, "Matriz", ""); !errors.Is(err, ErrConnected) {
@@ -371,5 +375,29 @@ func TestNaoRemovePerfilConectado(t *testing.T) {
 		if strings.Contains(k, "Empresa X") {
 			t.Errorf("sobrou credencial no cofre: %s", k)
 		}
+	}
+}
+
+func TestNaoConectaSegundoPerfilComOutroConectado(t *testing.T) {
+	svc, eng, _ := setup(t, true)
+	if _, err := svc.Import([]byte(`{"name":"Outra","gateway":"vpn2.exemplo.com","allowSavePassword":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	eng.status = engine.Connected // "Empresa X" está conectado
+	_, err := svc.Connect(ConnectRequest{Profile: "Outra", Username: "ana", Password: "s3"})
+	var oc *OtherConnectedError
+	if !errors.As(err, &oc) || oc.Name != "Empresa X" {
+		t.Fatalf("esperava OtherConnectedError (Empresa X), veio %v", err)
+	}
+	if eng.user != "" {
+		t.Error("não deveria ter tentado conectar")
+	}
+	if got := errmsg.Friendly(err); !strings.Contains(got, "Empresa X") {
+		t.Errorf("mensagem amigável perdeu o nome do perfil: %q", got)
+	}
+
+	eng.status = engine.Disconnected
+	if _, err := svc.Connect(ConnectRequest{Profile: "Outra", Username: "ana", Password: "s3"}); err != nil {
+		t.Fatalf("com o outro desconectado deveria conectar: %v", err)
 	}
 }
