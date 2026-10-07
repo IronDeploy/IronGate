@@ -76,7 +76,7 @@ O Iron Gate lida com credenciais e roda um serviço privilegiado. Por isso:
 - **Senha, PSK, cookie de sessão e código MFA nunca vão a disco** fora do cofre do sistema, **nem em argumento de linha de comando**, **nem em log**. O perfil JSON nunca contém segredo.
 - Todo valor que entra em arquivo de configuração ou em comando é validado em `internal/profile` (veja os testes de injeção).
 - Mudanças no helper (`internal/helper`) merecem atenção extra: ele roda como root e não pode confiar no que vem do cliente.
-- **Não abra issue pública para uma vulnerabilidade.** Use "Security" → "Report a vulnerability" na página do repositório, para relato privado.
+- **Não abra issue pública para uma vulnerabilidade.** Siga o [SECURITY.md](SECURITY.md) (relato privado). O que o helper permite e recusa está lá e no [modelo de ameaças](docs/modelo-de-ameacas.md).
 
 ## Código de conduta
 

@@ -108,6 +108,10 @@ O cliente deve resolver o nome `gateway` para o IP desta máquina (uma linha no 
 
 Para ver o erro técnico por trás de uma mensagem, rode com `IRONGATE_DEBUG=1`.
 
+## Segurança
+
+Vulnerabilidades: veja o [SECURITY.md](SECURITY.md). O que o Iron Gate protege, de quem, e os limites conhecidos estão no [modelo de ameaças](docs/modelo-de-ameacas.md).
+
 ## Licença
 
 Apache License 2.0. Veja [LICENSE](LICENSE).
