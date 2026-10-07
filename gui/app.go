@@ -91,7 +91,7 @@ func (a *App) ProfileJSON(name string) (string, error) {
 }
 
 // SaveProfile grava o perfil do formulário. previous é o nome antes da edição ("" para um perfil novo).
-// Os erros de validação já vêm em português, então seguem sem o prefixo "Falhou:".
+// Os erros de validação já vêm em português, então seguem sem passar por errmsg.Friendly.
 func (a *App) SaveProfile(data, previous, psk string) (string, error) {
 	return a.svc.SaveProfile([]byte(data), previous, psk)
 }

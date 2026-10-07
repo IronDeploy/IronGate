@@ -15,8 +15,8 @@ func TestFriendly(t *testing.T) {
 		"Failed to open HTTPS connection to vpn.x": "conexão segura",
 		"Server certificate verify failed":         "certificado",
 		// Regressões: erros que não são do strongSwan não podem virar "serviço parado".
-		"vici: command failed: establishing CHILD_SA failed": "Falhou:",
-		"open /x/perfil.json: no such file or directory":     "Falhou:",
+		"vici: command failed: establishing CHILD_SA failed": "vici: command failed",
+		"open /x/perfil.json: no such file or directory":     "open /x/perfil.json",
 	}
 	for in, want := range cases {
 		if got := Friendly(errors.New(in)); !strings.Contains(got, want) {
