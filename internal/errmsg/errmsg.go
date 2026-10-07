@@ -17,7 +17,7 @@ var pskNeedles = []string{"MAC mismatched", "no shared key found"}
 
 // Certificado do servidor não confiável: o log também traz AUTH_FAILED, então vem antes da regra de senha
 // e não conta como senha errada (a senha salva não pode ser descartada por isso).
-var certNeedles = []string{"no trusted RSA public key found", "no trusted ECDSA public key found", "no issuer certificate found"}
+var certNeedles = []string{"no trusted RSA public key found", "no trusted ECDSA public key found", "no issuer certificate found", "not authenticated by CA"}
 
 // O servidor recusa já na primeira resposta de autenticação, antes de pedir usuário e senha: costuma ser o
 // endereço do perfil que não bate com o nome do certificado (por exemplo, o IP em vez do nome). Também traz

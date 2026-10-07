@@ -3,9 +3,18 @@
 package engine
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/hex"
+	"encoding/pem"
 	"errors"
+	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/irondeploy/iron-gate/internal/profile"
 	"github.com/strongswan/govici/vici"
@@ -99,22 +108,43 @@ func TestConnMessageUsaServerIDComoIdentidadeDoServidor(t *testing.T) {
 	}
 }
 
+func testCA(t *testing.T, cn string) (pemData string, rawSubject []byte) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: cn}, IsCA: true,
+		BasicConstraintsValid: true, NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour)}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, _ := x509.ParseCertificate(der)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), cert.RawSubject
+}
+
 func TestConnMessageRestringeOCAPorConexao(t *testing.T) {
-	p := &profile.Profile{Name: "X", Engine: profile.EngineIPsecIKEv2, Gateway: "g.exemplo.com", Auth: profile.AuthEAPMSCHAPv2, CACert: "PEM-DO-CA"}
+	caPEM, subject := testCA(t, "CA da Empresa")
+	p := &profile.Profile{Name: "X", Engine: profile.EngineIPsecIKEv2, Gateway: "g.exemplo.com", Auth: profile.AuthEAPMSCHAPv2, CACert: caPEM}
 	remote := ConnMessage(p, "maria")["irongate-X"].(map[string]any)["remote"].(map[string]any)
-	if got, _ := remote["cacerts"].([]string); len(got) != 1 || got[0] != "PEM-DO-CA" {
-		t.Errorf("cacerts = %v", remote["cacerts"])
+	if want := "asn1dn:#" + hex.EncodeToString(subject); remote["ca_id"] != want {
+		t.Errorf("ca_id = %v, want %v", remote["ca_id"], want)
+	}
+	// "cacerts" deixaria o CA no daemon mesmo depois de desconectar.
+	if _, ok := remote["cacerts"]; ok {
+		t.Errorf("não deve usar cacerts: %v", remote)
 	}
 
 	p.CACert = ""
 	remote = ConnMessage(p, "maria")["irongate-X"].(map[string]any)["remote"].(map[string]any)
-	if _, ok := remote["cacerts"]; ok {
-		t.Errorf("perfil sem CA não deve fixar cacerts: %v", remote)
+	if _, ok := remote["ca_id"]; ok {
+		t.Errorf("perfil sem CA não deve fixar ca_id: %v", remote)
 	}
 
-	p.CACert, p.ServerAuth = "PEM-DO-CA", "psk"
+	p.CACert, p.ServerAuth = caPEM, "psk"
 	remote = ConnMessage(p, "maria")["irongate-X"].(map[string]any)["remote"].(map[string]any)
-	if _, ok := remote["cacerts"]; ok {
+	if _, ok := remote["ca_id"]; ok {
 		t.Errorf("PSK não usa CA: %v", remote)
 	}
 }

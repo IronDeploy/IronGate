@@ -4,6 +4,9 @@ package engine
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"strings"
@@ -24,9 +27,12 @@ func ConnMessage(p *profile.Profile, username string) map[string]any {
 		// O servidor se prova pela PSK. Sem id fixo: o identificador do FortiGate varia (IP, nome ou vazio).
 		remote = map[string]any{"auth": "psk", "id": "%any"}
 	} else if p.CACert != "" {
-		// Restringe a confiança por conexão: o certificado do servidor tem de encadear até o CA deste perfil.
-		// Só carregar a autoridade não basta, pois ela fica confiável para qualquer conexão do mesmo daemon.
-		remote["cacerts"] = []string{p.CACert}
+		// Restringe a confiança por conexão: a cadeia do servidor tem de passar pelo CA deste perfil. Só carregar
+		// a autoridade não basta, pois ela fica confiável para qualquer conexão do mesmo daemon. Não usa
+		// "cacerts": ele grava o CA como externo no daemon e o unload-authority não o remove mais.
+		if id := caSubjectID(p.CACert); id != "" {
+			remote["ca_id"] = id
+		}
 	}
 	conn := map[string]any{
 		"version":      "2",
@@ -47,6 +53,20 @@ func ConnMessage(p *profile.Profile, username string) map[string]any {
 	}
 	conn["children"] = map[string]any{child: ch}
 	return map[string]any{p.ConnName(): conn}
+}
+
+// caSubjectID devolve o assunto (DN) do CA no formato de identidade do strongSwan (asn1dn:#hex), ou "" se o
+// PEM não for um certificado. O DN em ASN.1 evita divergência de ordem e escape entre o Go e o strongSwan.
+func caSubjectID(caPEM string) string {
+	block, _ := pem.Decode([]byte(caPEM))
+	if block == nil {
+		return ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return ""
+	}
+	return "asn1dn:#" + hex.EncodeToString(cert.RawSubject)
 }
 
 func (*ipsec) Connect(p *profile.Profile, c Credentials) (retErr error) {
