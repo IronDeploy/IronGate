@@ -10,6 +10,10 @@ RUN pki --gen --type rsa --size 2048 --outform pem > ca.key \
  && pki --req --type rsa --in server.key --dn "CN=gateway" --san gateway --outform pem > server.req \
  && pki --issue --cacert ca.pem --cakey ca.key --type pkcs10 --in server.req --san gateway --flag serverAuth --lifetime 3650 --outform pem > server.pem
 
+# Um segundo CA, sem relação com o servidor: serve para provar que o CA de um perfil não valida o servidor de outro.
+RUN pki --gen --type rsa --size 2048 --outform pem > other.key \
+ && pki --self --ca --lifetime 3650 --in other.key --type rsa --dn "CN=Outro CA de Teste" --outform pem > other-ca.pem
+
 FROM golang:1.24 AS build
 ENV GOTOOLCHAIN=auto CGO_ENABLED=0
 WORKDIR /src
@@ -36,6 +40,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 FROM base AS client
 # O CA fica fora de /etc/swanctl de propósito: o irongate deve carregá-lo a partir do perfil.
 COPY --from=pki /pki/ca.pem /etc/test-ca.pem
+COPY --from=pki /pki/other-ca.pem /etc/test-other-ca.pem
 COPY --from=build /irongate /usr/local/bin/irongate
 # tester está no grupo do helper; intruso não. Nenhum dos dois é root nem acessa o VICI.
 RUN groupadd --system irongate && useradd -m -G irongate tester && useradd -m intruso

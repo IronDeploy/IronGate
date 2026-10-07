@@ -67,6 +67,20 @@ echo "$out" | grep -q "Erro: O certificado do servidor não é confiável" || fa
 echo "$out" | grep -q "Senha ou usuário incorretos" && fail "certificado não confiável foi tratado como senha errada"
 swanctl --list-authorities 2>/dev/null | grep -q irongate && fail "autoridade do perfil ficou carregada depois de desconectar"
 
+echo "== o CA do servidor carregado no daemon não vale para um perfil que confia em outro CA"
+# Com o CA do servidor confiável para todo o daemon (como fica enquanto outro perfil está conectado), o perfil
+# "CA errado", que confia só em outro CA, precisa falhar. Não dá para conectar os dois pela CLI: o app bloqueia
+# a segunda conexão, então o CA entra direto no daemon.
+other=$(awk 'BEGIN{ORS="\\n"} 1' /etc/test-other-ca.pem)
+printf '{"name":"CA errado","engine":"ipsec-ikev2","gateway":"gateway","auth":"eap-mschapv2","allowSavePassword":false,"caCert":"%s"}' "$other" > /test/ca-errado.json
+as tester irongate import /test/ca-errado.json || fail "import (CA errado)"
+mkdir -p /etc/swanctl/x509ca && cp /etc/test-ca.pem /etc/swanctl/x509ca/test-ca.pem
+swanctl --load-creds >/dev/null || fail "load-creds (CA do servidor)"
+out=$(printf 'maria\nsenha123\nn\n' | as tester irongate connect "CA errado" 2>&1) && fail "o CA do daemon validou o servidor para um perfil que confia em outro CA"
+echo "$out" | grep -q "Erro: O certificado do servidor não é confiável" || fail "mensagem de certificado ausente: $out"
+rm -f /etc/swanctl/x509ca/test-ca.pem
+swanctl --load-creds --clear >/dev/null || fail "limpar credenciais"
+
 echo "== gateway por IP: o serverId diz o nome que o certificado apresenta"
 ip=$(getent hosts gateway | awk '{print $1}')
 ca=$(awk 'BEGIN{ORS="\\n"} 1' /etc/test-ca.pem)
